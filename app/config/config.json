@@ -1,0 +1,38 @@
+{
+  "oauth": {
+    "privateKey": "app/public/assets/oauth-private.key",
+    "publicKey": "app/public/assets/oauth-public.key"
+  },
+  "responseMessages": {
+    "success": "Operation completed successfully.",
+    "error": "An error occurred during the operation.",
+    "404": "Resource Not Found"
+  },
+  "resourceURL": "https://ncash.online/storage/",
+  "defaultImage": "https://ncash.online/storage/service_icon/default-user.jpg",
+  "throttle": {
+    "max": 2,
+    "time": 1
+  },
+  "votingResource": {
+    "url": "https://stageapi.ncash.online",
+    "fetchCustomerDetails": "/api/v1/profiles/fetch_customer_details",
+    "createCustomer": "/api/v1/profiles/create_customer",
+    "fetchMerchantDetails": "/api/v1/profiles/fetch_merchant_details",
+    "newByStores": "/api/v1/profiles/nearby_merchants",
+    "searchStores": "/api/v1/profiles/search_the_store",
+    "updateCustomerFcm": "/api/v1/profiles/update_fcm",
+    "fetchQsrMenu": "/api/v1/qsr/fetch_menu",
+    "updateQsrOrder": "/api/v1/qsr/update_order",
+    "listOrder": "/api/v1/profiles/orders",
+    "orderInfo": "/api/v1/profiles/order",
+    "addAddress": "/api/event/participant/list",
+    "editAddress": "/api/event/participant/list",
+    "deleteAddress": "/api/event/participant/list",
+    "fetchGroceryMenu": "/api/event/participant/list",
+    "groceryPlaceOrder": "/api/event/participant/list",
+    "groceryProcessOrder": "/api/event/participant/list",
+    "createGroceryItem": "/api/event/participant/list",
+    "viewGroceryOrderInfo": "/api/event/participant/list"
+  }
+}
