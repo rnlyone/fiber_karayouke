@@ -1,29 +1,19 @@
 package controllers
 
 import (
-	"GoFiberMVC/app/repositories"
-
 	"github.com/gofiber/fiber/v2"
 )
 
 // UserController handles user-related requests
 type UserController struct {
 	// Controller dependencies or services can be injected here
-	clientRepo *repositories.ClientRepository
 }
 
 // Index handles the GET request for listing users
 func (c *UserController) Index(ctx *fiber.Ctx) error {
-	// Load all clients
-	if clientList, err := c.clientRepo.LoadAll(); err == nil {
-		return ctx.Render("index", fiber.Map{
-			"Title":   "Hello, World!",
-			"Clients": clientList,
-		})
-	}
 	// Render index template
 	return ctx.Render("index", fiber.Map{
-		"Title": "Error",
+		"Title": "Karayouke",
 	})
 }
 

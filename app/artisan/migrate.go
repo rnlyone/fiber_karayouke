@@ -8,14 +8,10 @@ import (
 )
 
 var modelsToMigrate = []interface{}{
-	&models.Account{},
-	&models.Client{},
-	&models.ClientAccount{},
-	&models.ClientDocument{},
-	&models.Events{},
-	&models.Service{},
-	&models.ServiceProvider{},
-	&models.TransactionLog{},
+	&models.User{},
+	&models.Subscription{},
+	&models.UserSubscription{},
+	&models.Package{},
 }
 
 func runMigrate(_ []string) error {

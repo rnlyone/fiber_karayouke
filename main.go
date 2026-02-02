@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"GoFiberMVC/app/artisan"
-	"GoFiberMVC/app/initializers"
 	"GoFiberMVC/app/providers"
 	"GoFiberMVC/app/routes"
 )
@@ -20,9 +19,13 @@ func main() {
 
 	app := providers.AppProvider()
 	routes.RegisterWebRoutes(app)
-	initializers.DbConnection()
-	initializers.OauthDatabaseConnection()
 
+	// Database connections are optional for WebSocket-only mode
+	// Uncomment if you need database functionality:
+	// initializers.DbConnection()
+	// initializers.OauthDatabaseConnection()
+
+	log.Println("Karayouke WebSocket server starting on :3000")
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
