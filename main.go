@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"GoFiberMVC/app/artisan"
+	"GoFiberMVC/app/initializers"
 	"GoFiberMVC/app/providers"
 	"GoFiberMVC/app/routes"
 )
@@ -18,14 +19,16 @@ func main() {
 	}
 
 	app := providers.AppProvider()
+
+	// Database connection for auth and rooms
+	if err := initializers.DbConnection(); err != nil {
+		log.Printf("Warning: Database connection failed: %v", err)
+		log.Println("Running in WebSocket-only mode without persistence")
+	}
+
 	routes.RegisterWebRoutes(app)
 
-	// Database connections are optional for WebSocket-only mode
-	// Uncomment if you need database functionality:
-	// initializers.DbConnection()
-	// initializers.OauthDatabaseConnection()
-
-	log.Println("Karayouke WebSocket server starting on :3000")
+	log.Println("Karayouke server starting on :3000")
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}

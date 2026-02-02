@@ -52,6 +52,16 @@ Fiberavel ships with a lightweight artisan CLI so your terminal muscle-memory st
 
 You can also use the colon form (`go run . artisan make:model User`) just like in Laravel. Feel free to extend the `app/artisan` package with additional commands (seeders, jobs, etc.) as your project grows.
 
+### Release artifacts
+
+The `release/` directory is intentionally ignored in this repository so that production bundles can live in a separate repo. To fetch or update the external release repo, run:
+
+```
+bash scripts/setup_release_repo.sh
+```
+
+By default this clones `https://github.com/rnlyone/karayouke_release.git` into `release/`. Pass a custom path/URL if you need a different mirror.
+
 ### Credits
 
 Fiberavel stands on the shoulders of the original [GoFiberMVC](https://github.com/samrat415/GoFiberMVC) project. Massive thanks to the maintainers for the initial inspiration.

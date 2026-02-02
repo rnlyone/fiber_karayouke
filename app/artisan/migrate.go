@@ -12,6 +12,10 @@ var modelsToMigrate = []interface{}{
 	&models.Subscription{},
 	&models.UserSubscription{},
 	&models.Package{},
+	&models.Room{},
+	&models.Song{},
+	&models.Guest{},
+	&models.PurchaseLog{},
 }
 
 func runMigrate(_ []string) error {

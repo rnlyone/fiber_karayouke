@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -41,6 +41,14 @@ func mustGetEnv(key string) string {
 	return value
 }
 
+func optionalEnv(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 func isProduction() bool {
 	flag := strings.ToLower(strings.TrimSpace(os.Getenv("IS_PRODUCTION")))
 	if flag == "false" || flag == "0" || flag == "no" {
@@ -58,8 +66,10 @@ func DbConnection() error {
 	dbUser := mustGetEnv("DB_USER")
 	dbPassword := mustGetEnv("DB_PASSWORD")
 	dbName := mustGetEnv("DB_NAME")
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", dbUser, dbPassword, dbHost, dbPort, dbName)
-	Db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+	sslMode := optionalEnv("DB_SSLMODE", "disable")
+	timezone := optionalEnv("DB_TIMEZONE", "UTC")
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s", dbHost, dbUser, dbPassword, dbName, dbPort, sslMode, timezone)
+	Db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 		PrepareStmt:                              true,
 		SkipDefaultTransaction:                   true,
 		DisableForeignKeyConstraintWhenMigrating: true,
@@ -90,9 +100,11 @@ func OauthDatabaseConnection() error {
 	dbUser := mustGetEnv("OAUTH_DB_USER")
 	dbPassword := mustGetEnv("OAUTH_DB_PASSWORD")
 	dbName := mustGetEnv("OAUTH_DB_NAME")
+	sslMode := optionalEnv("OAUTH_DB_SSLMODE", optionalEnv("DB_SSLMODE", "disable"))
+	timezone := optionalEnv("OAUTH_DB_TIMEZONE", optionalEnv("DB_TIMEZONE", "UTC"))
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", dbUser, dbPassword, dbHost, dbPort, dbName)
-	OauthDb, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s", dbHost, dbUser, dbPassword, dbName, dbPort, sslMode, timezone)
+	OauthDb, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 		PrepareStmt:                              true,
 		SkipDefaultTransaction:                   true,
 		DisableForeignKeyConstraintWhenMigrating: true,
