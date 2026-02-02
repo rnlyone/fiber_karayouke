@@ -24,10 +24,15 @@ var (
 )
 
 func loadEnv() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file:", err)
-	}
+	once.Do(func() {
+		if err := godotenv.Load(); err != nil {
+			if os.IsNotExist(err) {
+				log.Println(".env file not found; relying on environment variables")
+				return
+			}
+			log.Printf("Warning: could not load .env file: %v", err)
+		}
+	})
 }
 
 func mustGetEnv(key string) string {

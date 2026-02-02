@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 
 	"GoFiberMVC/app/artisan"
 	"GoFiberMVC/app/initializers"
@@ -28,8 +29,13 @@ func main() {
 
 	routes.RegisterWebRoutes(app)
 
-	log.Println("Karayouke server starting on :3000")
-	if err := app.Listen(":3000"); err != nil {
+	port := strings.TrimSpace(os.Getenv("PORT"))
+	if port == "" {
+		port = "3000"
+	}
+	addr := ":" + port
+	log.Printf("Karayouke server starting on %s", addr)
+	if err := app.Listen(addr); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
 }
