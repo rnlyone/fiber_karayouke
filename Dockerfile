@@ -1,10 +1,10 @@
-FROM golang:1.20-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 EXPOSE 3000
 
 RUN apk update \
   && apk add --no-cache \
-    mysql-client \
+    postgresql-client \
     build-base
 RUN mkdir /app
 WORKDIR /app
