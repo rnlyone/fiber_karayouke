@@ -1,8 +1,6 @@
 module GoFiberMVC
 
-go 1.24.0
-
-toolchain go1.24.12
+go 1.21
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -11,7 +9,7 @@ require (
 	github.com/gofiber/websocket/v2 v2.2.1
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/viper v1.16.0
-	golang.org/x/crypto v0.47.0
+	golang.org/x/crypto v0.46.0
 	gorm.io/driver/postgres v1.5.6
 	gorm.io/gorm v1.25.7
 )
