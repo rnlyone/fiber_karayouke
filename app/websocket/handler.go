@@ -4,6 +4,9 @@ import (
 	"log"
 	"strings"
 
+	"GoFiberMVC/app/initializers"
+	"GoFiberMVC/app/models"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 )
@@ -39,7 +42,15 @@ func HandleWebSocket(c *websocket.Conn) {
 		return
 	}
 
-	log.Printf("WebSocket: connection to room %s", roomKey)
+	// Validate room exists in database
+	var dbRoom models.Room
+	if err := initializers.Db.Where("room_key = ?", roomKey).First(&dbRoom).Error; err != nil {
+		log.Printf("WebSocket: room %s not found in database", roomKey)
+		c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","error":"Room not found"}`))
+		return
+	}
+
+	log.Printf("WebSocket: connection to room %s (%s)", roomKey, dbRoom.RoomName)
 
 	// Get or create room
 	room := roomManager.GetOrCreateRoom(roomKey)
@@ -80,6 +91,12 @@ func GetRoomState(c *fiber.Ctx) error {
 	roomKey := c.Params("roomKey")
 	if roomKey == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "room key required"})
+	}
+
+	// Validate room exists in database
+	var dbRoom models.Room
+	if err := initializers.Db.Where("room_key = ?", roomKey).First(&dbRoom).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Room not found"})
 	}
 
 	room := roomManager.GetOrCreateRoom(roomKey)
