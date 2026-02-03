@@ -1,14 +1,12 @@
 package middlewares
 
 import (
-	"GoFiberMVC/app/Resources"
-	"GoFiberMVC/app/initializers"
-	"GoFiberMVC/app/models"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/gofiber/fiber/v2"
 	"io/ioutil"
 	"strings"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gofiber/fiber/v2"
 )
 
 type ClientAuthMiddleware struct {
@@ -80,11 +78,6 @@ func (clientMiddleware *ClientAuthMiddleware) Auth(ctx *fiber.Ctx) error {
 	}
 
 	subJti := claims["jti"].(string)
-	if err != nil {
-		// Handle the error if parsing fails
-		fmt.Println("Failed to parse 'sub' claim as an integer:", err)
-		// Return an appropriate response or take necessary actions
-	}
 	// Perform your authentication logic here
 	// You can validate the token, decode claims, check permissions, etc.
 	user := &OauthAccessTokens{}
@@ -98,21 +91,9 @@ func (clientMiddleware *ClientAuthMiddleware) Auth(ctx *fiber.Ctx) error {
 
 	// Example: Check if the token is valid and belongs to an authenticated user
 	// Add the oauth object to the context
-
-	db := initializers.OauthDb
-	client := &models.Client{
-		Id: user.UserId,
-	}
-	db.Preload("Documents").Preload("ClientAccount.Account").First(client)
-	if client.IsActive() != true {
-		response := &Resources.ApiResponse{
-			Success: false,
-			Data:    "",
-			Message: "User is no longer Active",
-		}
-		return ctx.JSON(response)
-	}
-	ctx.Locals("auth", client)
+	// NOTE: models.Client is not defined in this codebase - this middleware is unused legacy code
+	// TODO: Remove this middleware or implement models.Client if needed
+	ctx.Locals("auth", user)
 	// Print all properties of the client object
 	// Continue to the next middleware or route handler
 	return ctx.Next()

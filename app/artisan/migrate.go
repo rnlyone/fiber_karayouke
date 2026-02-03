@@ -76,7 +76,7 @@ func seedDefaults() {
 		}
 	}
 
-	// Seed dummy package: 10 credits for 0 Rupiah
+	// Seed dummy package: 10 credits for 0 USD
 	var dummyPackage models.Package
 	if initializers.Db.Where("package_name = ?", "Starter Pack").First(&dummyPackage).RowsAffected == 0 {
 		dummyPackage = models.Package{
@@ -88,6 +88,6 @@ func seedDefaults() {
 			Visibility:    true,
 		}
 		initializers.Db.Create(&dummyPackage)
-		fmt.Println("Created dummy package: Starter Pack (10 credits for Rp 0)")
+		fmt.Println("Created dummy package: Starter Pack (10 credits for USD 0)")
 	}
 }

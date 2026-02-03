@@ -153,6 +153,13 @@ func (c *AuthController) Me(ctx *fiber.Ctx) error {
 		return ctx.Status(401).JSON(fiber.Map{"error": "Invalid or expired token"})
 	}
 
+	// Refresh user from database to ensure latest credit balance
+	var freshUser models.User
+	if err := initializers.Db.Where("id = ?", user.ID).First(&freshUser).Error; err == nil {
+		user = &freshUser
+		sessions[token] = &freshUser
+	}
+
 	return ctx.JSON(UserResponse{
 		ID:       user.ID,
 		Name:     user.Name,
@@ -178,6 +185,12 @@ func GetUserFromToken(ctx *fiber.Ctx) *models.User {
 		token = token[7:]
 	}
 	if user, exists := sessions[token]; exists {
+		// Refresh user from database to ensure latest credit balance
+		var freshUser models.User
+		if err := initializers.Db.Where("id = ?", user.ID).First(&freshUser).Error; err == nil {
+			sessions[token] = &freshUser
+			return &freshUser
+		}
 		return user
 	}
 	return nil

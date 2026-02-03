@@ -528,21 +528,131 @@ func (c *AdminController) GetDashboardStats(ctx *fiber.Ctx) error {
 	var totalUsers int64
 	var totalRooms int64
 	var activeRooms int64
+	var expiredRooms int64
 	var totalTransactions int64
 	var pendingTransactions int64
+	var settledTransactions int64
+	var failedTransactions int64
+	var totalPackages int64
+	var totalRevenue int64
+	var totalCreditsAwarded int64
+
+	now := time.Now()
 
 	initializers.Db.Model(&models.User{}).Count(&totalUsers)
 	initializers.Db.Model(&models.Room{}).Count(&totalRooms)
-	initializers.Db.Model(&models.Room{}).Where("expired_at IS NULL OR expired_at > ?", time.Now()).Count(&activeRooms)
+	initializers.Db.Model(&models.Room{}).Where("expired_at IS NULL OR expired_at > ?", now).Count(&activeRooms)
+	initializers.Db.Model(&models.Room{}).Where("expired_at IS NOT NULL AND expired_at <= ?", now).Count(&expiredRooms)
 	initializers.Db.Model(&models.Transaction{}).Count(&totalTransactions)
 	initializers.Db.Model(&models.Transaction{}).Where("status = ?", models.TransactionStatusPending).Count(&pendingTransactions)
+	initializers.Db.Model(&models.Transaction{}).Where("status = ?", models.TransactionStatusSettlement).Count(&settledTransactions)
+	initializers.Db.Model(&models.Transaction{}).Where("status = ?", models.TransactionStatusFailed).Count(&failedTransactions)
+	initializers.Db.Model(&models.Package{}).Count(&totalPackages)
+	initializers.Db.Model(&models.Transaction{}).Where("status = ?", models.TransactionStatusSettlement).
+		Select("COALESCE(SUM(amount),0)").Scan(&totalRevenue)
+	initializers.Db.Model(&models.CreditLog{}).Where("amount > 0").
+		Select("COALESCE(SUM(amount),0)").Scan(&totalCreditsAwarded)
+
+	// Recap periods
+	last24h := now.Add(-24 * time.Hour)
+	last7d := now.Add(-7 * 24 * time.Hour)
+	last30d := now.Add(-30 * 24 * time.Hour)
+
+	getRecap := func(since time.Time) fiber.Map {
+		var users int64
+		var rooms int64
+		var transactions int64
+		var revenue int64
+		var credits int64
+
+		initializers.Db.Model(&models.User{}).Where("created_at >= ?", since).Count(&users)
+		initializers.Db.Model(&models.Room{}).Where("created_at >= ?", since).Count(&rooms)
+		initializers.Db.Model(&models.Transaction{}).Where("created_at >= ?", since).Count(&transactions)
+		initializers.Db.Model(&models.Transaction{}).
+			Where("status = ? AND created_at >= ?", models.TransactionStatusSettlement, since).
+			Select("COALESCE(SUM(amount),0)").Scan(&revenue)
+		initializers.Db.Model(&models.CreditLog{}).Where("amount > 0 AND created_at >= ?", since).
+			Select("COALESCE(SUM(amount),0)").Scan(&credits)
+
+		return fiber.Map{
+			"users":        users,
+			"rooms":        rooms,
+			"transactions": transactions,
+			"revenue":      revenue,
+			"credits":      credits,
+		}
+	}
+
+	// Time series (last 7 days)
+	labels := make([]string, 0, 7)
+	usersSeries := make([]int64, 0, 7)
+	roomsSeries := make([]int64, 0, 7)
+	transactionsSeries := make([]int64, 0, 7)
+	revenueSeries := make([]int64, 0, 7)
+
+	startOfDay := func(t time.Time) time.Time {
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	}
+
+	for i := 6; i >= 0; i-- {
+		dayStart := startOfDay(now.AddDate(0, 0, -i))
+		dayEnd := dayStart.Add(24 * time.Hour)
+
+		var users int64
+		var rooms int64
+		var transactions int64
+		var revenue int64
+
+		initializers.Db.Model(&models.User{}).Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).Count(&users)
+		initializers.Db.Model(&models.Room{}).Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).Count(&rooms)
+		initializers.Db.Model(&models.Transaction{}).Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).Count(&transactions)
+		initializers.Db.Model(&models.Transaction{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", models.TransactionStatusSettlement, dayStart, dayEnd).
+			Select("COALESCE(SUM(amount),0)").Scan(&revenue)
+
+		labels = append(labels, dayStart.Format("Jan 2"))
+		usersSeries = append(usersSeries, users)
+		roomsSeries = append(roomsSeries, rooms)
+		transactionsSeries = append(transactionsSeries, transactions)
+		revenueSeries = append(revenueSeries, revenue)
+	}
 
 	return ctx.JSON(fiber.Map{
-		"total_users":          totalUsers,
-		"total_rooms":          totalRooms,
-		"active_rooms":         activeRooms,
-		"total_transactions":   totalTransactions,
-		"pending_transactions": pendingTransactions,
+		"totalUsers":          totalUsers,
+		"totalRooms":          totalRooms,
+		"activeRooms":         activeRooms,
+		"expiredRooms":        expiredRooms,
+		"totalTransactions":   totalTransactions,
+		"pendingTransactions": pendingTransactions,
+		"settledTransactions": settledTransactions,
+		"failedTransactions":  failedTransactions,
+		"totalPackages":       totalPackages,
+		"totalRevenue":        totalRevenue,
+		"totalCreditsAwarded": totalCreditsAwarded,
+		"recaps": fiber.Map{
+			"last24h": getRecap(last24h),
+			"last7d":  getRecap(last7d),
+			"last30d": getRecap(last30d),
+		},
+		"series": fiber.Map{
+			"labels":       labels,
+			"users":        usersSeries,
+			"rooms":        roomsSeries,
+			"transactions": transactionsSeries,
+			"revenue":      revenueSeries,
+		},
+		"system": fiber.Map{
+			"roomMaxDuration":  GetRoomMaxDuration(),
+			"roomCreationCost": GetRoomCreationCost(),
+			"defaultCredits": func() int {
+				value, err := strconv.Atoi(GetConfigValue(models.ConfigDefaultCredits, "5"))
+				if err != nil {
+					return 5
+				}
+				return value
+			}(),
+		},
+		"serverTime": now.Format(time.RFC3339),
 	})
 }
 

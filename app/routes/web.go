@@ -62,7 +62,16 @@ func RegisterWebRoutes(app *fiber.App) {
 	app.Get("/api/packages", packageController.ListPublic)
 	app.Post("/api/packages/:id/purchase", packageController.Purchase)
 	app.Get("/api/transactions", packageController.MyTransactions)
+	app.Get("/api/transactions/:id", packageController.GetTransaction)
 	app.Get("/api/credits", packageController.GetMyCredits)
+	app.Post("/api/payment/callback", packageController.PaymentCallback)
+
+	// Stripe payment routes
+	stripeController := &controllers.StripeController{}
+	app.Get("/api/stripe/config", stripeController.GetPublishableKey)
+	app.Post("/api/stripe/create-payment-intent", stripeController.CreatePaymentIntent)
+	app.Post("/api/stripe/confirm-payment", stripeController.ConfirmPayment)
+	app.Post("/api/stripe/webhook", stripeController.HandleWebhook)
 
 	// WebSocket routes for karaoke rooms
 	// Support both /ws/:roomKey and /parties/main/:roomKey for compatibility

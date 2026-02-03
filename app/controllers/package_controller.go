@@ -147,12 +147,106 @@ func (c *PackageController) MyTransactions(ctx *fiber.Ctx) error {
 		return ctx.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
+	page, _ := strconv.Atoi(ctx.Query("page", "1"))
+	limit, _ := strconv.Atoi(ctx.Query("limit", "10"))
+	status := ctx.Query("status", "")
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	query := initializers.Db.Where("user_id = ?", user.ID).Preload("Package")
+	if status != "" && status != "all" {
+		query = query.Where("status = ?", status)
+	}
+
 	var transactions []models.Transaction
-	if err := initializers.Db.Where("user_id = ?", user.ID).Preload("Package").Order("created_at DESC").Find(&transactions).Error; err != nil {
+	var total int64
+
+	query.Model(&models.Transaction{}).Count(&total)
+	if err := query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&transactions).Error; err != nil {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch transactions"})
 	}
 
-	return ctx.JSON(transactions)
+	// Format response with package details
+	type TransactionResponse struct {
+		ID            string `json:"id"`
+		PackageName   string `json:"package_name"`
+		CreditAmount  int    `json:"credit_amount"`
+		Amount        int64  `json:"amount"`
+		Status        string `json:"status"`
+		PaymentMethod string `json:"payment_method"`
+		CreatedAt     string `json:"created_at"`
+	}
+
+	response := make([]TransactionResponse, len(transactions))
+	for i, tx := range transactions {
+		pkgName := ""
+		creditAmt := 0
+		if tx.Package.ID != "" {
+			pkgName = tx.Package.PackageName
+			creditAmt = tx.Package.CreditAmount
+		}
+		response[i] = TransactionResponse{
+			ID:            tx.ID,
+			PackageName:   pkgName,
+			CreditAmount:  creditAmt,
+			Amount:        tx.Amount,
+			Status:        string(tx.Status),
+			PaymentMethod: tx.PaymentMethod,
+			CreatedAt:     tx.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	hasMore := int64(offset+limit) < total
+
+	return ctx.JSON(fiber.Map{
+		"transactions": response,
+		"total":        total,
+		"page":         page,
+		"limit":        limit,
+		"has_more":     hasMore,
+	})
+}
+
+// GetTransaction returns a single transaction by ID
+func (c *PackageController) GetTransaction(ctx *fiber.Ctx) error {
+	user := GetUserFromToken(ctx)
+	if user == nil {
+		return ctx.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	txID := ctx.Params("id")
+	if txID == "" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Transaction ID is required"})
+	}
+
+	var transaction models.Transaction
+	if err := initializers.Db.Where("id = ? AND user_id = ?", txID, user.ID).Preload("Package").First(&transaction).Error; err != nil {
+		return ctx.Status(404).JSON(fiber.Map{"error": "Transaction not found"})
+	}
+
+	pkgName := ""
+	creditAmt := 0
+	if transaction.Package.ID != "" {
+		pkgName = transaction.Package.PackageName
+		creditAmt = transaction.Package.CreditAmount
+	}
+
+	return ctx.JSON(fiber.Map{
+		"id":             transaction.ID,
+		"package_name":   pkgName,
+		"credit_amount":  creditAmt,
+		"amount":         transaction.Amount,
+		"status":         string(transaction.Status),
+		"payment_method": transaction.PaymentMethod,
+		"external_id":    transaction.ExternalID,
+		"created_at":     transaction.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	})
 }
 
 // GetMyCredits returns the current user's credit balance and history
