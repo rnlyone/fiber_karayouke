@@ -63,9 +63,9 @@ func runMigrate(args []string) error {
 func seedDefaults() {
 	// Seed default system configs
 	defaultConfigs := []models.SystemConfig{
-		{Key: models.ConfigRoomMaxDuration, Value: "120"}, // 2 hours default
-		{Key: models.ConfigRoomCreationCost, Value: "1"},  // 1 credit to create room
-		{Key: models.ConfigDefaultCredits, Value: "5"},    // 5 credits for new users
+		{ID: uuid.New().String(), Key: models.ConfigRoomMaxDuration, Value: "120"}, // 2 hours default
+		{ID: uuid.New().String(), Key: models.ConfigRoomCreationCost, Value: "1"},  // 1 credit to create room
+		{ID: uuid.New().String(), Key: models.ConfigDefaultCredits, Value: "5"},    // 5 credits for new users
 	}
 
 	for _, config := range defaultConfigs {
