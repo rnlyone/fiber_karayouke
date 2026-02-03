@@ -13,7 +13,7 @@ import (
 func RegisterWebRoutes(app *fiber.App) {
 	// Enable CORS for frontend
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:5173,http://127.0.0.1:5173",
+		AllowOrigins:     "http://localhost:5173,http://127.0.0.1:5173,http://karayouke.com,http://www.karayouke.com,https://karayouke.com,https://www.karayouke.com",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
 		AllowCredentials: true,
