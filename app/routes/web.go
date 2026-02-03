@@ -22,6 +22,8 @@ func RegisterWebRoutes(app *fiber.App) {
 	userController := &controllers.UserController{}
 	authController := &controllers.AuthController{}
 	roomController := &controllers.RoomController{}
+	adminController := &controllers.AdminController{}
+	packageController := &controllers.PackageController{}
 
 	app.Get("", userController.Index)
 
@@ -36,6 +38,31 @@ func RegisterWebRoutes(app *fiber.App) {
 	app.Get("/api/rooms", roomController.List)
 	app.Get("/api/rooms/:roomKey", roomController.Get)
 	app.Get("/api/rooms/:roomKey/access", roomController.CheckAccess)
+
+	// Admin check (no middleware - returns is_admin status)
+	app.Get("/api/admin/check", adminController.CheckAdmin)
+
+	// Admin routes (protected)
+	admin := app.Group("/api/admin", controllers.AdminMiddleware)
+	admin.Get("/dashboard", adminController.GetDashboardStats)
+	admin.Get("/configs", adminController.GetConfigs)
+	admin.Post("/configs", adminController.UpdateConfig)
+	admin.Get("/packages", adminController.ListPackages)
+	admin.Post("/packages", adminController.CreatePackage)
+	admin.Put("/packages/:id", adminController.UpdatePackage)
+	admin.Delete("/packages/:id", adminController.DeletePackage)
+	admin.Get("/users", adminController.ListUsers)
+	admin.Get("/users/:id", adminController.GetUser)
+	admin.Post("/credits/award", adminController.AwardCredits)
+	admin.Get("/transactions", adminController.ListTransactions)
+	admin.Put("/transactions/:id/status", adminController.UpdateTransactionStatus)
+	admin.Get("/rooms", adminController.ListRooms)
+
+	// Public package routes (for users to see available packages)
+	app.Get("/api/packages", packageController.ListPublic)
+	app.Post("/api/packages/:id/purchase", packageController.Purchase)
+	app.Get("/api/transactions", packageController.MyTransactions)
+	app.Get("/api/credits", packageController.GetMyCredits)
 
 	// WebSocket routes for karaoke rooms
 	// Support both /ws/:roomKey and /parties/main/:roomKey for compatibility

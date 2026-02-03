@@ -57,18 +57,27 @@ func (Package) TableName() string {
 }
 
 type Room struct {
-	ID           string    `gorm:"column:id;primaryKey" json:"id"`
-	RoomKey      string    `gorm:"column:room_key" json:"room_key"`
-	RoomCreator  string    `gorm:"column:room_creator" json:"room_creator"`
-	RoomName     string    `gorm:"column:room_name" json:"room_name"`
-	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	RoomMaster   string    `gorm:"column:room_master" json:"room_master"`
-	Creator      User      `gorm:"foreignKey:RoomCreator;references:ID" json:"creator"`
-	Master       User      `gorm:"foreignKey:RoomMaster;references:ID" json:"master"`
+	ID          string     `gorm:"column:id;primaryKey" json:"id"`
+	RoomKey     string     `gorm:"column:room_key;uniqueIndex" json:"room_key"`
+	RoomCreator string     `gorm:"column:room_creator" json:"room_creator"`
+	RoomName    string     `gorm:"column:room_name" json:"room_name"`
+	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	ExpiredAt   *time.Time `gorm:"column:expired_at" json:"expired_at"`
+	RoomMaster  string     `gorm:"column:room_master" json:"room_master"`
+	Creator     User       `gorm:"foreignKey:RoomCreator;references:ID" json:"creator"`
+	Master      User       `gorm:"foreignKey:RoomMaster;references:ID" json:"master"`
 }
 
 func (Room) TableName() string {
 	return "rooms"
+}
+
+// IsExpired checks if the room has expired
+func (r *Room) IsExpired() bool {
+	if r.ExpiredAt == nil {
+		return false
+	}
+	return time.Now().After(*r.ExpiredAt)
 }
 
 type PurchaseLog struct {
@@ -105,15 +114,88 @@ func (Song) TableName() string {
 }
 
 type Guest struct {
-	ID        string     `gorm:"column:id;primaryKey" json:"id"`
-	Name      string     `gorm:"column:name" json:"name"`
-	CreatedAt time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UserID    *string    `gorm:"column:id_user" json:"user_id"`
-	RoomID    string     `gorm:"column:id_room" json:"room_id"`
-	Room      Room       `gorm:"foreignKey:RoomID;references:ID" json:"room"`
-	User      *User      `gorm:"foreignKey:UserID;references:ID" json:"user"`
+	ID        string    `gorm:"column:id;primaryKey" json:"id"`
+	Name      string    `gorm:"column:name" json:"name"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UserID    *string   `gorm:"column:id_user" json:"user_id"`
+	RoomID    string    `gorm:"column:id_room" json:"room_id"`
+	Room      Room      `gorm:"foreignKey:RoomID;references:ID" json:"room"`
+	User      *User     `gorm:"foreignKey:UserID;references:ID" json:"user"`
 }
 
 func (Guest) TableName() string {
 	return "guests"
 }
+
+// SystemConfig stores global system configuration
+type SystemConfig struct {
+	ID        string    `gorm:"column:id;primaryKey" json:"id"`
+	Key       string    `gorm:"column:key;uniqueIndex" json:"key"`
+	Value     string    `gorm:"column:value" json:"value"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+func (SystemConfig) TableName() string {
+	return "system_configs"
+}
+
+// Transaction represents a payment transaction
+type Transaction struct {
+	ID            string     `gorm:"column:id;primaryKey" json:"id"`
+	UserID        string     `gorm:"column:user_id" json:"user_id"`
+	PackageID     string     `gorm:"column:package_id" json:"package_id"`
+	Amount        int64      `gorm:"column:amount" json:"amount"`
+	Status        string     `gorm:"column:status" json:"status"` // pending, settlement, failed, expired, refunded
+	PaymentMethod string     `gorm:"column:payment_method" json:"payment_method"`
+	ExternalID    string     `gorm:"column:external_id" json:"external_id"` // For payment gateway reference
+	CreatedAt     time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	PaidAt        *time.Time `gorm:"column:paid_at" json:"paid_at"`
+	User          User       `gorm:"foreignKey:UserID;references:ID" json:"user"`
+	Package       Package    `gorm:"foreignKey:PackageID;references:ID" json:"package"`
+}
+
+func (Transaction) TableName() string {
+	return "transactions"
+}
+
+// Transaction status constants
+const (
+	TransactionStatusPending    = "pending"
+	TransactionStatusSettlement = "settlement"
+	TransactionStatusFailed     = "failed"
+	TransactionStatusExpired    = "expired"
+	TransactionStatusRefunded   = "refunded"
+)
+
+// System config key constants
+const (
+	ConfigRoomMaxDuration  = "room_max_duration"  // in minutes
+	ConfigRoomCreationCost = "room_creation_cost" // credits required
+	ConfigDefaultCredits   = "default_credits"    // credits for new users
+)
+
+// CreditLog tracks credit changes
+type CreditLog struct {
+	ID          string    `gorm:"column:id;primaryKey" json:"id"`
+	UserID      string    `gorm:"column:user_id" json:"user_id"`
+	Amount      int       `gorm:"column:amount" json:"amount"`             // positive for add, negative for deduct
+	Balance     int       `gorm:"column:balance" json:"balance"`           // balance after transaction
+	Type        string    `gorm:"column:type" json:"type"`                 // purchase, room_creation, admin_award, refund
+	ReferenceID string    `gorm:"column:reference_id" json:"reference_id"` // transaction_id, room_id, etc.
+	Description string    `gorm:"column:description" json:"description"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	User        User      `gorm:"foreignKey:UserID;references:ID" json:"user"`
+}
+
+func (CreditLog) TableName() string {
+	return "credit_logs"
+}
+
+// Credit log type constants
+const (
+	CreditTypeAdminAward   = "admin_award"
+	CreditTypePurchase     = "purchase"
+	CreditTypeRoomCreation = "room_creation"
+	CreditTypeRefund       = "refund"
+)

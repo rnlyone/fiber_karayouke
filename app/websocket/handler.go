@@ -1,8 +1,10 @@
 package websocket
 
 import (
+	"encoding/json"
 	"log"
 	"strings"
+	"time"
 
 	"GoFiberMVC/app/initializers"
 	"GoFiberMVC/app/models"
@@ -50,6 +52,13 @@ func HandleWebSocket(c *websocket.Conn) {
 		return
 	}
 
+	// Check if room is expired
+	if dbRoom.IsExpired() {
+		log.Printf("WebSocket: room %s is expired", roomKey)
+		c.WriteMessage(websocket.TextMessage, []byte(`{"type":"room_expired","message":"This room has expired"}`))
+		return
+	}
+
 	log.Printf("WebSocket: connection to room %s (%s)", roomKey, dbRoom.RoomName)
 
 	// Get or create room
@@ -64,8 +73,17 @@ func HandleWebSocket(c *websocket.Conn) {
 	// Send initial state
 	room.SendState(conn)
 
+	// Start expiration checker goroutine if room has expiry
+	stopChecker := make(chan struct{})
+	if dbRoom.ExpiredAt != nil {
+		go func() {
+			checkExpirationAndKick(roomKey, room, stopChecker)
+		}()
+	}
+
 	// Handle incoming messages
 	defer func() {
+		close(stopChecker)
 		conn.Close()
 		room.RemoveConnection(conn)
 		log.Printf("WebSocket: disconnected from room %s", roomKey)
@@ -82,6 +100,44 @@ func HandleWebSocket(c *websocket.Conn) {
 
 		if messageType == websocket.TextMessage {
 			room.HandleMessage(conn, message)
+		}
+	}
+}
+
+// checkExpirationAndKick checks if the room has expired and kicks all users
+func checkExpirationAndKick(roomKey string, room *Room, stop chan struct{}) {
+	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			// Re-fetch room to check expiration
+			var dbRoom models.Room
+			if err := initializers.Db.Where("room_key = ?", roomKey).First(&dbRoom).Error; err != nil {
+				continue
+			}
+
+			if dbRoom.IsExpired() {
+				log.Printf("WebSocket: room %s has expired, kicking all users", roomKey)
+				// Broadcast expiration to all clients
+				msg := map[string]interface{}{
+					"type":    "room_expired",
+					"message": "This room has expired",
+				}
+				data, _ := json.Marshal(msg)
+				room.Broadcast(data)
+
+				// Close all connections
+				room.mu.Lock()
+				for conn := range room.Connections {
+					conn.Close()
+				}
+				room.mu.Unlock()
+				return
+			}
 		}
 	}
 }
