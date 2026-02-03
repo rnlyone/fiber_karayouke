@@ -24,7 +24,7 @@ func getStripeSecretKey() string {
 	key := os.Getenv("STRIPE_SECRET_KEY")
 	if key == "" {
 		// Fallback to test key for development
-		key = ""
+		key = "sk_test_51SwiWs04TpTRkqrXNMnYSC9ZPw9JN4Ie1NzikMIgfbW99mIq57fOxp5RR0ImV10tWFmcZmqPtwkeL2hmN2lDUrsY00Qf2DGt45"
 	}
 	return key
 }
@@ -33,7 +33,7 @@ func getStripeWebhookSecret() string {
 	secret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 	if secret == "" {
 		// Fallback to test webhook secret for development
-		secret = ""
+		secret = "whsec_3e82ac60fe885aadcdfb14d0433b5be05e952556cb591ddc8bda747937f7a449"
 	}
 	return secret
 }
@@ -42,7 +42,7 @@ func getStripePublishableKey() string {
 	key := os.Getenv("STRIPE_PUBLISHABLE_KEY")
 	if key == "" {
 		// Fallback to test key for development
-		key = ""
+		key = "pk_test_51SwiWs04TpTRkqrXNnrFjFmx0mYYNnVbPwYjzNsgbuhxDQ87EHdGFi3K3ek1CcWup4bmcLufKUTVi7KyU4TPNNsR00HKlP0Klh"
 	}
 	return key
 }
