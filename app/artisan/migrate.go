@@ -23,10 +23,29 @@ var modelsToMigrate = []interface{}{
 	&models.CreditLog{},
 }
 
-func runMigrate(_ []string) error {
-	fmt.Println("Running database migrations...")
+func runMigrate(args []string) error {
+	// Check for "fresh" argument
+	isFresh := len(args) > 0 && args[0] == "fresh"
+
+	if isFresh {
+		fmt.Println("Running fresh migration (dropping all tables)...")
+	} else {
+		fmt.Println("Running database migrations...")
+	}
+
 	if err := initializers.DbConnection(); err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Drop all tables if fresh migration
+	if isFresh {
+		fmt.Println("Dropping all tables...")
+		for i := len(modelsToMigrate) - 1; i >= 0; i-- {
+			if err := initializers.Db.Migrator().DropTable(modelsToMigrate[i]); err != nil {
+				fmt.Printf("Warning: failed to drop table for %T: %v\n", modelsToMigrate[i], err)
+			}
+		}
+		fmt.Println("All tables dropped successfully")
 	}
 
 	if err := initializers.Db.AutoMigrate(modelsToMigrate...); err != nil {
