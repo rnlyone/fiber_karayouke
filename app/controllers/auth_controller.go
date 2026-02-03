@@ -3,6 +3,7 @@ package controllers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"time"
 
 	"GoFiberMVC/app/initializers"
 	"GoFiberMVC/app/models"
@@ -38,8 +39,8 @@ type UserResponse struct {
 	Credit   int    `json:"credit"`
 }
 
-// Session storage (in production, use Redis or database)
-var sessions = make(map[string]*models.User)
+// Session duration: 30 days
+const sessionDuration = 30 * 24 * time.Hour
 
 func generateID() string {
 	bytes := make([]byte, 16)
@@ -51,6 +52,49 @@ func generateToken() string {
 	bytes := make([]byte, 32)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
+}
+
+// createSession creates a new session in the database
+func createSession(userID string) (string, error) {
+	token := generateToken()
+	session := models.Session{
+		ID:        generateID(),
+		Token:     token,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(sessionDuration),
+	}
+	if err := initializers.Db.Create(&session).Error; err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// getSessionUser retrieves user from session token
+func getSessionUser(token string) *models.User {
+	var session models.Session
+	if err := initializers.Db.Where("token = ? AND expires_at > ?", token, time.Now()).First(&session).Error; err != nil {
+		return nil
+	}
+
+	var user models.User
+	if err := initializers.Db.Where("id = ?", session.UserID).First(&user).Error; err != nil {
+		return nil
+	}
+
+	// Extend session expiry on activity (rolling session)
+	initializers.Db.Model(&session).Update("expires_at", time.Now().Add(sessionDuration))
+
+	return &user
+}
+
+// deleteSession removes a session from the database
+func deleteSession(token string) {
+	initializers.Db.Where("token = ?", token).Delete(&models.Session{})
+}
+
+// cleanupExpiredSessions removes expired sessions (can be called periodically)
+func cleanupExpiredSessions() {
+	initializers.Db.Where("expires_at < ?", time.Now()).Delete(&models.Session{})
 }
 
 func (c *AuthController) Register(ctx *fiber.Ctx) error {
@@ -88,8 +132,10 @@ func (c *AuthController) Register(ctx *fiber.Ctx) error {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create user"})
 	}
 
-	token := generateToken()
-	sessions[token] = &user
+	token, err := createSession(user.ID)
+	if err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create session"})
+	}
 
 	return ctx.JSON(AuthResponse{
 		Token: token,
@@ -122,8 +168,10 @@ func (c *AuthController) Login(ctx *fiber.Ctx) error {
 		return ctx.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
-	token := generateToken()
-	sessions[token] = &user
+	token, err := createSession(user.ID)
+	if err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create session"})
+	}
 
 	return ctx.JSON(AuthResponse{
 		Token: token,
@@ -148,16 +196,9 @@ func (c *AuthController) Me(ctx *fiber.Ctx) error {
 		token = token[7:]
 	}
 
-	user, exists := sessions[token]
-	if !exists {
+	user := getSessionUser(token)
+	if user == nil {
 		return ctx.Status(401).JSON(fiber.Map{"error": "Invalid or expired token"})
-	}
-
-	// Refresh user from database to ensure latest credit balance
-	var freshUser models.User
-	if err := initializers.Db.Where("id = ?", user.ID).First(&freshUser).Error; err == nil {
-		user = &freshUser
-		sessions[token] = &freshUser
 	}
 
 	return ctx.JSON(UserResponse{
@@ -174,7 +215,7 @@ func (c *AuthController) Logout(ctx *fiber.Ctx) error {
 	if len(token) > 7 && token[:7] == "Bearer " {
 		token = token[7:]
 	}
-	delete(sessions, token)
+	deleteSession(token)
 	return ctx.JSON(fiber.Map{"message": "Logged out successfully"})
 }
 
@@ -184,14 +225,5 @@ func GetUserFromToken(ctx *fiber.Ctx) *models.User {
 	if len(token) > 7 && token[:7] == "Bearer " {
 		token = token[7:]
 	}
-	if user, exists := sessions[token]; exists {
-		// Refresh user from database to ensure latest credit balance
-		var freshUser models.User
-		if err := initializers.Db.Where("id = ?", user.ID).First(&freshUser).Error; err == nil {
-			sessions[token] = &freshUser
-			return &freshUser
-		}
-		return user
-	}
-	return nil
+	return getSessionUser(token)
 }

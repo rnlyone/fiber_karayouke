@@ -231,6 +231,19 @@ func (c *StripeController) HandleWebhook(ctx *fiber.Ctx) error {
 		}
 		c.handlePaymentFailure(&paymentIntent)
 
+	case "payment_intent.canceled":
+		var paymentIntent stripe.PaymentIntent
+		if err := json.Unmarshal(event.Data.Raw, &paymentIntent); err != nil {
+			fmt.Printf("Error parsing webhook JSON: %v\n", err)
+			return ctx.Status(400).JSON(fiber.Map{"error": "Error parsing webhook JSON"})
+		}
+		c.handlePaymentFailure(&paymentIntent)
+
+	case "payment_intent.requires_action":
+		// Payment requires additional action (e.g., 3D Secure)
+		// Log but don't change status - user needs to complete action
+		fmt.Printf("Payment intent requires action: %s\n", event.Type)
+
 	default:
 		fmt.Printf("Unhandled event type: %s\n", event.Type)
 	}
@@ -357,11 +370,36 @@ func (c *StripeController) ConfirmPayment(ctx *fiber.Ctx) error {
 		return ctx.Status(404).JSON(fiber.Map{"error": "Transaction not found"})
 	}
 
-	// If payment succeeded but webhook hasn't processed yet, process it now
-	if pi.Status == stripe.PaymentIntentStatusSucceeded && transaction.Status == models.TransactionStatusPending {
-		c.handlePaymentSuccess(pi)
-		// Reload transaction
-		initializers.Db.Where("id = ?", req.TransactionID).First(&transaction)
+	// Handle different payment intent statuses
+	switch pi.Status {
+	case stripe.PaymentIntentStatusSucceeded:
+		// If payment succeeded but webhook hasn't processed yet, process it now
+		if transaction.Status == models.TransactionStatusPending {
+			c.handlePaymentSuccess(pi)
+			// Reload transaction
+			initializers.Db.Where("id = ?", req.TransactionID).First(&transaction)
+		}
+	case stripe.PaymentIntentStatusRequiresPaymentMethod:
+		// Payment method failed (card declined, insufficient funds, etc.)
+		// This is a failed state - the user needs to try again with a different method
+		if transaction.Status == models.TransactionStatusPending {
+			c.handlePaymentFailure(pi)
+			// Reload transaction
+			initializers.Db.Where("id = ?", req.TransactionID).First(&transaction)
+		}
+	case stripe.PaymentIntentStatusCanceled:
+		// Payment was canceled
+		if transaction.Status == models.TransactionStatusPending {
+			c.handlePaymentFailure(pi)
+			// Reload transaction
+			initializers.Db.Where("id = ?", req.TransactionID).First(&transaction)
+		}
+	case stripe.PaymentIntentStatusRequiresAction:
+		// Still waiting for customer action (e.g., 3D Secure)
+		// Keep as pending
+	case stripe.PaymentIntentStatusProcessing:
+		// Payment is being processed (e.g., bank transfer)
+		// Keep as pending
 	}
 
 	return ctx.JSON(fiber.Map{

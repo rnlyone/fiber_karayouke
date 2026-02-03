@@ -199,3 +199,17 @@ const (
 	CreditTypeRoomCreation = "room_creation"
 	CreditTypeRefund       = "refund"
 )
+
+// Session stores user authentication sessions in the database
+type Session struct {
+	ID        string    `gorm:"column:id;primaryKey" json:"id"`
+	Token     string    `gorm:"column:token;uniqueIndex" json:"token"`
+	UserID    string    `gorm:"column:user_id;index" json:"user_id"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	ExpiresAt time.Time `gorm:"column:expires_at;index" json:"expires_at"`
+	User      User      `gorm:"foreignKey:UserID;references:ID" json:"user"`
+}
+
+func (Session) TableName() string {
+	return "sessions"
+}
