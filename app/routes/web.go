@@ -73,6 +73,13 @@ func RegisterWebRoutes(app *fiber.App) {
 	app.Post("/api/stripe/confirm-payment", stripeController.ConfirmPayment)
 	app.Post("/api/stripe/webhook", stripeController.HandleWebhook)
 
+	// TV connection routes
+	tvController := &controllers.TVController{}
+	app.Post("/api/tv/token", tvController.GenerateToken)          // Generate new TV token (no auth - TV device)
+	app.Get("/api/tv/status/:token", tvController.GetStatus)       // Check TV connection status (no auth - TV polls)
+	app.Post("/api/tv/connect", tvController.Connect)              // Connect TV to room (requires auth - room master)
+	app.Post("/api/tv/disconnect/:token", tvController.Disconnect) // Disconnect TV from room
+
 	// WebSocket routes for karaoke rooms
 	// Support both /ws/:roomKey and /parties/main/:roomKey for compatibility
 	app.Use("/ws", ws.WebSocketUpgrade)

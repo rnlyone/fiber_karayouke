@@ -213,3 +213,17 @@ type Session struct {
 func (Session) TableName() string {
 	return "sessions"
 }
+
+// TVToken stores TV device connection tokens
+type TVToken struct {
+	ID        string    `gorm:"column:id;primaryKey" json:"id"`
+	Token     string    `gorm:"column:token;uniqueIndex" json:"token"`           // Full token for QR code
+	ShortCode string    `gorm:"column:short_code;uniqueIndex" json:"short_code"` // 5-char code for manual entry
+	RoomKey   string    `gorm:"column:room_key" json:"room_key"`                 // Connected room (empty until connected)
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	ExpiresAt time.Time `gorm:"column:expires_at;index" json:"expires_at"`
+}
+
+func (TVToken) TableName() string {
+	return "tv_tokens"
+}

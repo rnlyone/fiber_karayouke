@@ -22,6 +22,7 @@ var modelsToMigrate = []interface{}{
 	&models.Transaction{},
 	&models.CreditLog{},
 	&models.Session{},
+	&models.TVToken{},
 }
 
 func runMigrate(args []string) error {
