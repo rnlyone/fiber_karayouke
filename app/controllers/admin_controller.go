@@ -73,7 +73,7 @@ func (c *AdminController) GetConfigs(ctx *fiber.Ctx) error {
 	return ctx.JSON(configMap)
 }
 
-func (c *AdminController) UpdateConfig(ctx *fiber.Ctx) error {
+func (c *AdminController) CreateConfig(ctx *fiber.Ctx) error {
 	var req UpdateConfigRequest
 	if err := ctx.BodyParser(&req); err != nil {
 		return ctx.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
@@ -83,27 +83,83 @@ func (c *AdminController) UpdateConfig(ctx *fiber.Ctx) error {
 		return ctx.Status(400).JSON(fiber.Map{"error": "Key and value are required"})
 	}
 
+	// Check if config already exists
+	var existing models.SystemConfig
+	if err := initializers.Db.Where("key = ?", req.Key).First(&existing).Error; err == nil {
+		return ctx.Status(409).JSON(fiber.Map{"error": "Config with this key already exists"})
+	}
+
+	config := models.SystemConfig{
+		ID:    generateID(),
+		Key:   req.Key,
+		Value: req.Value,
+	}
+
+	if err := initializers.Db.Create(&config).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create config"})
+	}
+
+	return ctx.Status(201).JSON(config)
+}
+
+func (c *AdminController) UpdateConfig(ctx *fiber.Ctx) error {
+	key := ctx.Params("key")
+	if key == "" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Key is required"})
+	}
+
+	var req struct {
+		Value string `json:"value"`
+	}
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.Value == "" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Value is required"})
+	}
+
 	var config models.SystemConfig
-	result := initializers.Db.Where("key = ?", req.Key).First(&config)
-	if result.Error != nil {
-		// Create new config
-		config = models.SystemConfig{
-			ID:    generateID(),
-			Key:   req.Key,
-			Value: req.Value,
-		}
-		if err := initializers.Db.Create(&config).Error; err != nil {
-			return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create config"})
-		}
-	} else {
-		// Update existing
-		config.Value = req.Value
-		if err := initializers.Db.Save(&config).Error; err != nil {
-			return ctx.Status(500).JSON(fiber.Map{"error": "Failed to update config"})
-		}
+	if err := initializers.Db.Where("key = ?", key).First(&config).Error; err != nil {
+		return ctx.Status(404).JSON(fiber.Map{"error": "Config not found"})
+	}
+
+	config.Value = req.Value
+	if err := initializers.Db.Save(&config).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to update config"})
 	}
 
 	return ctx.JSON(config)
+}
+
+func (c *AdminController) DeleteConfig(ctx *fiber.Ctx) error {
+	key := ctx.Params("key")
+	if key == "" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Key is required"})
+	}
+
+	// Prevent deletion of critical configs
+	criticalConfigs := []string{
+		models.ConfigRoomMaxDuration,
+		models.ConfigRoomCreationCost,
+		models.ConfigDefaultCredits,
+	}
+	for _, critical := range criticalConfigs {
+		if key == critical {
+			return ctx.Status(400).JSON(fiber.Map{"error": "Cannot delete critical system configuration"})
+		}
+	}
+
+	var config models.SystemConfig
+	if err := initializers.Db.Where("key = ?", key).First(&config).Error; err != nil {
+		return ctx.Status(404).JSON(fiber.Map{"error": "Config not found"})
+	}
+
+	if err := initializers.Db.Delete(&config).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to delete config"})
+	}
+
+	return ctx.JSON(fiber.Map{"message": "Config deleted successfully"})
 }
 
 // ========================================
