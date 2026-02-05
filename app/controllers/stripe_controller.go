@@ -5,8 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"GoFiberMVC/app/initializers"
 	"GoFiberMVC/app/models"
@@ -54,6 +57,66 @@ func (c *StripeController) GetPublishableKey(ctx *fiber.Ctx) error {
 	})
 }
 
+// GetCurrencyFromIP detects user's currency based on their IP address using ipapi.co
+func GetCurrencyFromIP(ip string) string {
+	// Skip for localhost/private IPs
+	if ip == "" || ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") {
+		return "usd" // Default for local development
+	}
+
+	// Call ipapi.co free API
+	resp, err := http.Get(fmt.Sprintf("https://ipapi.co/%s/json/", ip))
+	if err != nil {
+		fmt.Printf("Error getting IP info: %v\n", err)
+		return "usd" // Default on error
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		fmt.Printf("IP API returned status: %d\n", resp.StatusCode)
+		return "usd"
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading IP API response: %v\n", err)
+		return "usd"
+	}
+
+	var result struct {
+		CountryCode string `json:"country_code"`
+		Currency    string `json:"currency"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		fmt.Printf("Error parsing IP API response: %v\n", err)
+		return "usd"
+	}
+
+	// Map currency codes to supported currencies
+	currency := strings.ToLower(result.Currency)
+	switch currency {
+	case "jpy":
+		return "jpy"
+	case "idr":
+		return "idr"
+	case "usd":
+		return "usd"
+	default:
+		// For unsupported currencies, map by country code
+		switch result.CountryCode {
+		case "JP":
+			return "jpy"
+		case "ID":
+			return "idr"
+		case "US":
+			return "usd"
+		default:
+			return "usd" // Default to USD for other countries
+		}
+	}
+}
+
 // CreatePaymentIntent creates a Stripe PaymentIntent for a package purchase
 func (c *StripeController) CreatePaymentIntent(ctx *fiber.Ctx) error {
 	user := GetUserFromToken(ctx)
@@ -63,7 +126,6 @@ func (c *StripeController) CreatePaymentIntent(ctx *fiber.Ctx) error {
 
 	var req struct {
 		PackageID string `json:"package_id"`
-		Currency  string `json:"currency"`
 	}
 
 	if err := ctx.BodyParser(&req); err != nil {
@@ -80,6 +142,11 @@ func (c *StripeController) CreatePaymentIntent(ctx *fiber.Ctx) error {
 		return ctx.Status(404).JSON(fiber.Map{"error": "Package not found"})
 	}
 
+	// Detect currency from user's IP address
+	clientIP := ctx.IP()
+	currency := GetCurrencyFromIP(clientIP)
+	fmt.Printf("Detected currency '%s' for IP: %s\n", currency, clientIP)
+
 	// Parse price (stored in cents)
 	price, _ := strconv.ParseInt(pkg.Price, 10, 64)
 	if price < 0 {
@@ -91,12 +158,6 @@ func (c *StripeController) CreatePaymentIntent(ctx *fiber.Ctx) error {
 		return c.handleFreePackage(ctx, user, &pkg)
 	}
 
-	// Determine currency (default to USD)
-	currency := req.Currency
-	if currency == "" {
-		currency = "usd"
-	}
-
 	// Convert price based on currency (price is stored as USD cents)
 	// Use proper rounding to avoid truncation issues
 	amount := price
@@ -105,7 +166,7 @@ func (c *StripeController) CreatePaymentIntent(ctx *fiber.Ctx) error {
 		// JPY doesn't use cents, convert from USD cents to JPY
 		// Using approximate rate: 1 USD = 149 JPY
 		// Round to nearest integer to avoid truncation issues
-		amount = (price*149 + 50) / 100  // Add 50 for proper rounding
+		amount = (price*149 + 50) / 100 // Add 50 for proper rounding
 		// Ensure minimum amount for JPY (50 JPY)
 		if amount < 50 {
 			amount = 50
