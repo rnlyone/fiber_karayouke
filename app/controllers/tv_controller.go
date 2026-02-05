@@ -158,7 +158,8 @@ func (c *TVController) Connect(ctx *fiber.Ctx) error {
 	}
 
 	// Check if room is expired
-	if room.IsExpired() {
+	maxDuration := GetRoomMaxDuration()
+	if room.IsExpired(maxDuration) {
 		return ctx.Status(400).JSON(fiber.Map{"error": "Room has expired"})
 	}
 

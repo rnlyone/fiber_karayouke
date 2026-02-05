@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"GoFiberMVC/app/controllers"
 	"GoFiberMVC/app/initializers"
 	"GoFiberMVC/app/models"
 
@@ -53,7 +54,8 @@ func HandleWebSocket(c *websocket.Conn) {
 	}
 
 	// Check if room is expired
-	if dbRoom.IsExpired() {
+	maxDuration := controllers.GetRoomMaxDuration()
+	if dbRoom.IsExpired(maxDuration) {
 		log.Printf("WebSocket: room %s is expired", roomKey)
 		c.WriteMessage(websocket.TextMessage, []byte(`{"type":"room_expired","message":"This room has expired"}`))
 		return
@@ -73,13 +75,11 @@ func HandleWebSocket(c *websocket.Conn) {
 	// Send initial state
 	room.SendState(conn)
 
-	// Start expiration checker goroutine if room has expiry
+	// Start expiration checker goroutine
 	stopChecker := make(chan struct{})
-	if dbRoom.ExpiredAt != nil {
-		go func() {
-			checkExpirationAndKick(roomKey, room, stopChecker)
-		}()
-	}
+	go func() {
+		checkExpirationAndKick(roomKey, room, stopChecker)
+	}()
 
 	// Handle incoming messages
 	defer func() {
@@ -120,7 +120,8 @@ func checkExpirationAndKick(roomKey string, room *Room, stop chan struct{}) {
 				continue
 			}
 
-			if dbRoom.IsExpired() {
+			maxDuration := controllers.GetRoomMaxDuration()
+			if dbRoom.IsExpired(maxDuration) {
 				log.Printf("WebSocket: room %s has expired, kicking all users", roomKey)
 				// Broadcast expiration to all clients
 				msg := map[string]interface{}{

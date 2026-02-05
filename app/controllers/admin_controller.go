@@ -553,22 +553,31 @@ func (c *AdminController) ListRooms(ctx *fiber.Ctx) error {
 
 	query := initializers.Db.Model(&models.Room{}).Preload("Creator")
 
-	now := time.Now()
-	switch status {
-	case "active":
-		query = query.Where("expired_at IS NULL OR expired_at > ?", now)
-	case "expired":
-		query = query.Where("expired_at IS NOT NULL AND expired_at <= ?", now)
-	}
+	maxDuration := GetRoomMaxDuration()
 
+	// Note: We can't filter by expiration in SQL anymore since it's calculated dynamically
+	// We'll fetch all rooms and filter in memory if needed
 	query.Count(&total)
 
 	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&rooms).Error; err != nil {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch rooms"})
 	}
 
+	// Filter by status if requested (in memory since expiration is calculated)
+	var filteredRooms []models.Room
+	if status == "active" || status == "expired" {
+		for _, room := range rooms {
+			isExpired := room.IsExpired(maxDuration)
+			if (status == "active" && !isExpired) || (status == "expired" && isExpired) {
+				filteredRooms = append(filteredRooms, room)
+			}
+		}
+	} else {
+		filteredRooms = rooms
+	}
+
 	return ctx.JSON(fiber.Map{
-		"rooms": rooms,
+		"rooms": filteredRooms,
 		"total": total,
 		"page":  page,
 		"limit": limit,
@@ -597,8 +606,19 @@ func (c *AdminController) GetDashboardStats(ctx *fiber.Ctx) error {
 
 	initializers.Db.Model(&models.User{}).Count(&totalUsers)
 	initializers.Db.Model(&models.Room{}).Count(&totalRooms)
-	initializers.Db.Model(&models.Room{}).Where("expired_at IS NULL OR expired_at > ?", now).Count(&activeRooms)
-	initializers.Db.Model(&models.Room{}).Where("expired_at IS NOT NULL AND expired_at <= ?", now).Count(&expiredRooms)
+
+	// Calculate active/expired rooms dynamically
+	var allRooms []models.Room
+	initializers.Db.Model(&models.Room{}).Find(&allRooms)
+	maxDuration := GetRoomMaxDuration()
+	for _, room := range allRooms {
+		if room.IsExpired(maxDuration) {
+			expiredRooms++
+		} else {
+			activeRooms++
+		}
+	}
+
 	initializers.Db.Model(&models.Transaction{}).Count(&totalTransactions)
 	initializers.Db.Model(&models.Transaction{}).Where("status = ?", models.TransactionStatusPending).Count(&pendingTransactions)
 	initializers.Db.Model(&models.Transaction{}).Where("status = ?", models.TransactionStatusSettlement).Count(&settledTransactions)

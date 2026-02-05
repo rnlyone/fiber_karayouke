@@ -57,27 +57,28 @@ func (Package) TableName() string {
 }
 
 type Room struct {
-	ID          string     `gorm:"column:id;primaryKey" json:"id"`
-	RoomKey     string     `gorm:"column:room_key;uniqueIndex" json:"room_key"`
-	RoomCreator string     `gorm:"column:room_creator" json:"room_creator"`
-	RoomName    string     `gorm:"column:room_name" json:"room_name"`
-	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	ExpiredAt   *time.Time `gorm:"column:expired_at" json:"expired_at"`
-	RoomMaster  string     `gorm:"column:room_master" json:"room_master"`
-	Creator     User       `gorm:"foreignKey:RoomCreator;references:ID" json:"creator"`
-	Master      User       `gorm:"foreignKey:RoomMaster;references:ID" json:"master"`
+	ID          string    `gorm:"column:id;primaryKey" json:"id"`
+	RoomKey     string    `gorm:"column:room_key;uniqueIndex" json:"room_key"`
+	RoomCreator string    `gorm:"column:room_creator" json:"room_creator"`
+	RoomName    string    `gorm:"column:room_name" json:"room_name"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	RoomMaster  string    `gorm:"column:room_master" json:"room_master"`
+	Creator     User      `gorm:"foreignKey:RoomCreator;references:ID" json:"creator"`
+	Master      User      `gorm:"foreignKey:RoomMaster;references:ID" json:"master"`
 }
 
 func (Room) TableName() string {
 	return "rooms"
 }
 
-// IsExpired checks if the room has expired
-func (r *Room) IsExpired() bool {
-	if r.ExpiredAt == nil {
-		return false
-	}
-	return time.Now().After(*r.ExpiredAt)
+// GetExpiredAt calculates the expiration time based on CreatedAt + room_max_duration
+func (r *Room) GetExpiredAt(maxDuration int) time.Time {
+	return r.CreatedAt.Add(time.Duration(maxDuration) * time.Minute)
+}
+
+// IsExpired checks if the room has expired based on room_max_duration config
+func (r *Room) IsExpired(maxDuration int) bool {
+	return time.Now().After(r.GetExpiredAt(maxDuration))
 }
 
 type PurchaseLog struct {
