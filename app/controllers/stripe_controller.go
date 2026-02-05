@@ -98,18 +98,32 @@ func (c *StripeController) CreatePaymentIntent(ctx *fiber.Ctx) error {
 	}
 
 	// Convert price based on currency (price is stored as USD cents)
+	// Use proper rounding to avoid truncation issues
 	amount := price
 	switch currency {
 	case "jpy":
 		// JPY doesn't use cents, convert from USD cents to JPY
 		// Using approximate rate: 1 USD = 149 JPY
-		amount = price * 149 / 100
+		// Round to nearest integer to avoid truncation issues
+		amount = (price*149 + 50) / 100  // Add 50 for proper rounding
+		// Ensure minimum amount for JPY (50 JPY)
+		if amount < 50 {
+			amount = 50
+		}
 	case "idr":
 		// IDR: 1 USD = ~15800 IDR
-		amount = price * 15800 / 100
+		// Round to nearest integer
+		amount = (price*15800 + 50) / 100
+		// Ensure minimum amount for IDR (1000 IDR)
+		if amount < 1000 {
+			amount = 1000
+		}
 	default:
 		currency = "usd"
-		// Already in cents
+		// Already in cents, ensure minimum (50 cents)
+		if amount < 50 {
+			amount = 50
+		}
 	}
 
 	// Set Stripe API key
