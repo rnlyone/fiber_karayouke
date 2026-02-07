@@ -248,11 +248,9 @@ func (r *Room) HandleMessage(conn *Connection, message []byte) {
 				}
 			}
 
-			if insertPos != "" && currentIndex != -1 {
+			// Only apply special positioning for "next" - anything else goes to end
+			if insertPos == "next" && currentIndex != -1 {
 				offset := 1
-				if insertPos != "next" {
-					offset = 2
-				}
 				targetIndex := currentIndex + offset
 				if targetIndex > len(r.State.Playlist) {
 					targetIndex = len(r.State.Playlist)
@@ -260,6 +258,7 @@ func (r *Room) HandleMessage(conn *Connection, message []byte) {
 				// Insert at position
 				r.State.Playlist = append(r.State.Playlist[:targetIndex], append([]Video{newVideo}, r.State.Playlist[targetIndex:]...)...)
 			} else {
+				// Add to end of playlist
 				r.State.Playlist = append(r.State.Playlist, newVideo)
 				if r.State.Settings.OrderByFairness {
 					r.reorderPlaylistByFairness()
