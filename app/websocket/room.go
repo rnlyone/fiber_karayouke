@@ -330,6 +330,8 @@ func (r *Room) HandleMessage(conn *Connection, message []byte) {
 				break
 			}
 		}
+		// Clean up old played songs to prevent memory accumulation (keep last 10 played)
+		r.cleanupOldPlayedSongs()
 		r.mu.Unlock()
 
 	case "horn":
@@ -343,6 +345,29 @@ func (r *Room) HandleMessage(conn *Connection, message []byte) {
 	}
 
 	r.BroadcastState()
+}
+
+// cleanupOldPlayedSongs removes old played songs, keeping only the last 10 played
+// This prevents memory accumulation on TV browsers and constrained devices
+func (r *Room) cleanupOldPlayedSongs() {
+	played := []Video{}
+	unplayed := []Video{}
+
+	for _, v := range r.State.Playlist {
+		if v.PlayedAt != nil {
+			played = append(played, v)
+		} else {
+			unplayed = append(unplayed, v)
+		}
+	}
+
+	// Keep only the last 10 played songs
+	if len(played) > 10 {
+		played = played[len(played)-10:]
+	}
+
+	// Reconstruct playlist with limited played songs + all unplayed
+	r.State.Playlist = append(played, unplayed...)
 }
 
 // reorderPlaylistByFairness reorders the playlist to be fair across singers

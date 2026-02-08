@@ -68,7 +68,6 @@ const RoomPlayer = () => {
 	};
 
 	const onPlayerReady = (event) => {
-		console.log('Player ready', { event });
 		playerRef.current = event.target;
 		setIsReady(true);
 		try {
@@ -112,6 +111,20 @@ const RoomPlayer = () => {
 	// The player simply plays whatever nowPlaying is (first unplayed song).
 	// Sending reorder commands from the player causes race conditions
 	// when multiple users are adding songs to the queue.
+
+	// Cleanup YouTube player on unmount to prevent memory leaks (critical for TV browsers)
+	useEffect(() => {
+		return () => {
+			if (playerRef.current) {
+				try {
+					playerRef.current.destroy?.();
+				} catch {
+					// ignore errors during cleanup
+				}
+				playerRef.current = null;
+			}
+		};
+	}, []);
 
 	if (isVerifying) {
 		return (
