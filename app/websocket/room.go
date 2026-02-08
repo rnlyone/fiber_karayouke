@@ -257,12 +257,13 @@ func (r *Room) HandleMessage(conn *Connection, message []byte) {
 				}
 				// Insert at position
 				r.State.Playlist = append(r.State.Playlist[:targetIndex], append([]Video{newVideo}, r.State.Playlist[targetIndex:]...)...)
-			} else {
-				// Add to end of playlist
-				r.State.Playlist = append(r.State.Playlist, newVideo)
+				// Apply fairness reordering after inserting at specific position
 				if r.State.Settings.OrderByFairness {
 					r.reorderPlaylistByFairness()
 				}
+			} else {
+				// Add to end of playlist (without fairness reordering to maintain insertion order)
+				r.State.Playlist = append(r.State.Playlist, newVideo)
 			}
 		}
 		r.mu.Unlock()
