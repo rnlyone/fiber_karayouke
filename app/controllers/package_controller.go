@@ -13,30 +13,69 @@ import (
 
 type PackageController struct{}
 
-// ListPublic returns all visible packages for users
+// ========================================
+// Public: List Subscription Plans
+// ========================================
+
+// ListSubscriptionPlans returns visible subscription plans for users
+func (c *PackageController) ListSubscriptionPlans(ctx *fiber.Ctx) error {
+	var plans []models.SubscriptionPlan
+	if err := initializers.Db.Where("visibility = ?", true).Order("sort_order ASC, price ASC").Find(&plans).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch subscription plans"})
+	}
+
+	type PlanResponse struct {
+		ID                  string `json:"id"`
+		PlanName            string `json:"plan_name"`
+		PlanDetail          string `json:"plan_detail"`
+		Price               int64  `json:"price"` // IDR
+		BillingPeriodDays   int    `json:"billing_period_days"`
+		DailyFreeCredits    int    `json:"daily_free_credits"`
+		RoomDurationMinutes int    `json:"room_duration_minutes"`
+	}
+
+	response := make([]PlanResponse, len(plans))
+	for i, plan := range plans {
+		response[i] = PlanResponse{
+			ID:                  plan.ID,
+			PlanName:            plan.PlanName,
+			PlanDetail:          string(plan.PlanDetail),
+			Price:               plan.Price,
+			BillingPeriodDays:   plan.BillingPeriodDays,
+			DailyFreeCredits:    plan.DailyFreeCredits,
+			RoomDurationMinutes: plan.RoomDurationMinutes,
+		}
+	}
+
+	return ctx.JSON(response)
+}
+
+// ========================================
+// Public: List Extra Credit Packages
+// ========================================
+
+// ListPublic returns all visible extra credit packages for users
 func (c *PackageController) ListPublic(ctx *fiber.Ctx) error {
 	var packages []models.Package
 	if err := initializers.Db.Where("visibility = ?", true).Order("credit_amount ASC").Find(&packages).Error; err != nil {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch packages"})
 	}
 
-	// Convert price to int for frontend
 	type PackageResponse struct {
 		ID            string `json:"id"`
 		PackageName   string `json:"package_name"`
 		PackageDetail string `json:"package_detail"`
-		Price         int64  `json:"price"`
+		Price         int64  `json:"price"` // IDR
 		CreditAmount  int    `json:"credit_amount"`
 	}
 
 	response := make([]PackageResponse, len(packages))
 	for i, pkg := range packages {
-		price, _ := strconv.ParseInt(pkg.Price, 10, 64)
 		response[i] = PackageResponse{
 			ID:            pkg.ID,
 			PackageName:   pkg.PackageName,
 			PackageDetail: string(pkg.PackageDetail),
-			Price:         price,
+			Price:         pkg.Price,
 			CreditAmount:  pkg.CreditAmount,
 		}
 	}
@@ -44,103 +83,10 @@ func (c *PackageController) ListPublic(ctx *fiber.Ctx) error {
 	return ctx.JSON(response)
 }
 
-// Purchase initiates a package purchase
-func (c *PackageController) Purchase(ctx *fiber.Ctx) error {
-	user := GetUserFromToken(ctx)
-	if user == nil {
-		return ctx.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
-	}
+// ========================================
+// My Transactions
+// ========================================
 
-	packageID := ctx.Params("id")
-	if packageID == "" {
-		return ctx.Status(400).JSON(fiber.Map{"error": "Package ID is required"})
-	}
-
-	var pkg models.Package
-	if err := initializers.Db.Where("id = ? AND visibility = ?", packageID, true).First(&pkg).Error; err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"error": "Package not found"})
-	}
-
-	price, _ := strconv.ParseInt(pkg.Price, 10, 64)
-
-	// Generate transaction ID
-	txBytes := make([]byte, 16)
-	rand.Read(txBytes)
-	txID := hex.EncodeToString(txBytes)
-
-	// Generate external ID for payment gateway
-	extBytes := make([]byte, 8)
-	rand.Read(extBytes)
-	externalID := "KRY-" + hex.EncodeToString(extBytes)
-
-	transaction := models.Transaction{
-		ID:            txID,
-		UserID:        user.ID,
-		PackageID:     pkg.ID,
-		Amount:        price,
-		Status:        models.TransactionStatusPending,
-		PaymentMethod: "manual", // Will be updated by payment gateway
-		ExternalID:    externalID,
-	}
-
-	if err := initializers.Db.Create(&transaction).Error; err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create transaction"})
-	}
-
-	// If price is 0, auto-settle
-	if price == 0 {
-		return c.settleTransaction(&transaction, user)
-	}
-
-	// Return transaction for payment processing
-	// In real implementation, this would return payment gateway URL
-	return ctx.JSON(fiber.Map{
-		"transaction_id": transaction.ID,
-		"external_id":    transaction.ExternalID,
-		"amount":         price,
-		"status":         transaction.Status,
-		"package":        pkg.PackageName,
-		"credits":        pkg.CreditAmount,
-		// payment_url would be added here when integrating payment gateway
-	})
-}
-
-// settleTransaction completes a transaction and awards credits
-func (c *PackageController) settleTransaction(transaction *models.Transaction, user *models.User) error {
-	// Load package
-	var pkg models.Package
-	if err := initializers.Db.Where("id = ?", transaction.PackageID).First(&pkg).Error; err != nil {
-		return err
-	}
-
-	// Update transaction status
-	transaction.Status = models.TransactionStatusSettlement
-	if err := initializers.Db.Save(transaction).Error; err != nil {
-		return err
-	}
-
-	// Award credits
-	user.Credit += pkg.CreditAmount
-	if err := initializers.Db.Save(user).Error; err != nil {
-		return err
-	}
-
-	// Log credit
-	creditLog := models.CreditLog{
-		ID:          generateCreditLogID(),
-		UserID:      user.ID,
-		Amount:      pkg.CreditAmount,
-		Balance:     user.Credit,
-		Type:        models.CreditTypePurchase,
-		ReferenceID: transaction.ID,
-		Description: "Purchase: " + pkg.PackageName,
-	}
-	initializers.Db.Create(&creditLog)
-
-	return nil
-}
-
-// MyTransactions returns the current user's transactions
 func (c *PackageController) MyTransactions(ctx *fiber.Ctx) error {
 	user := GetUserFromToken(ctx)
 	if user == nil {
@@ -159,7 +105,8 @@ func (c *PackageController) MyTransactions(ctx *fiber.Ctx) error {
 	}
 	offset := (page - 1) * limit
 
-	query := initializers.Db.Where("user_id = ?", user.ID).Preload("Package")
+	query := initializers.Db.Where("user_id = ?", user.ID).
+		Preload("Package").Preload("Plan")
 	if status != "" && status != "all" {
 		query = query.Where("status = ?", status)
 	}
@@ -172,32 +119,35 @@ func (c *PackageController) MyTransactions(ctx *fiber.Ctx) error {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch transactions"})
 	}
 
-	// Format response with package details
 	type TransactionResponse struct {
 		ID            string `json:"id"`
-		PackageName   string `json:"package_name"`
+		ItemName      string `json:"item_name"`
 		CreditAmount  int    `json:"credit_amount"`
-		Amount        int64  `json:"amount"`
+		Amount        int64  `json:"amount"` // IDR
 		Status        string `json:"status"`
 		PaymentMethod string `json:"payment_method"`
+		TxType        string `json:"tx_type"`
 		CreatedAt     string `json:"created_at"`
 	}
 
 	response := make([]TransactionResponse, len(transactions))
 	for i, tx := range transactions {
-		pkgName := ""
+		itemName := ""
 		creditAmt := 0
-		if tx.Package.ID != "" {
-			pkgName = tx.Package.PackageName
+		if tx.TxType == models.TxTypeExtraCredit && tx.Package != nil {
+			itemName = tx.Package.PackageName
 			creditAmt = tx.Package.CreditAmount
+		} else if tx.TxType == models.TxTypeSubscription && tx.Plan != nil {
+			itemName = tx.Plan.PlanName + " Subscription"
 		}
 		response[i] = TransactionResponse{
 			ID:            tx.ID,
-			PackageName:   pkgName,
+			ItemName:      itemName,
 			CreditAmount:  creditAmt,
 			Amount:        tx.Amount,
-			Status:        string(tx.Status),
+			Status:        tx.Status,
 			PaymentMethod: tx.PaymentMethod,
+			TxType:        tx.TxType,
 			CreatedAt:     tx.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
 	}
@@ -213,7 +163,10 @@ func (c *PackageController) MyTransactions(ctx *fiber.Ctx) error {
 	})
 }
 
-// GetTransaction returns a single transaction by ID
+// ========================================
+// Get Transaction
+// ========================================
+
 func (c *PackageController) GetTransaction(ctx *fiber.Ctx) error {
 	user := GetUserFromToken(ctx)
 	if user == nil {
@@ -226,89 +179,84 @@ func (c *PackageController) GetTransaction(ctx *fiber.Ctx) error {
 	}
 
 	var transaction models.Transaction
-	if err := initializers.Db.Where("id = ? AND user_id = ?", txID, user.ID).Preload("Package").First(&transaction).Error; err != nil {
+	if err := initializers.Db.Where("id = ? AND user_id = ?", txID, user.ID).
+		Preload("Package").Preload("Plan").First(&transaction).Error; err != nil {
 		return ctx.Status(404).JSON(fiber.Map{"error": "Transaction not found"})
 	}
 
-	pkgName := ""
+	itemName := ""
 	creditAmt := 0
-	if transaction.Package.ID != "" {
-		pkgName = transaction.Package.PackageName
+	if transaction.TxType == models.TxTypeExtraCredit && transaction.Package != nil {
+		itemName = transaction.Package.PackageName
 		creditAmt = transaction.Package.CreditAmount
+	} else if transaction.TxType == models.TxTypeSubscription && transaction.Plan != nil {
+		itemName = transaction.Plan.PlanName + " Subscription"
 	}
 
 	return ctx.JSON(fiber.Map{
 		"id":             transaction.ID,
-		"package_name":   pkgName,
+		"item_name":      itemName,
 		"credit_amount":  creditAmt,
 		"amount":         transaction.Amount,
-		"status":         string(transaction.Status),
+		"status":         transaction.Status,
 		"payment_method": transaction.PaymentMethod,
+		"tx_type":        transaction.TxType,
 		"external_id":    transaction.ExternalID,
 		"created_at":     transaction.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	})
 }
 
-// GetMyCredits returns the current user's credit balance and history
+// ========================================
+// Get My Credits (with subscription info)
+// ========================================
+
 func (c *PackageController) GetMyCredits(ctx *fiber.Ctx) error {
 	user := GetUserFromToken(ctx)
 	if user == nil {
 		return ctx.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
+	// Reset free credits if needed
+	ResetFreeCreditIfNeeded(user)
+
+	// Get subscription info
+	var subscriptionInfo fiber.Map
+	if user.HasActiveSubscription() {
+		var plan models.SubscriptionPlan
+		if err := initializers.Db.Where("id = ?", *user.SubscriptionPlanID).First(&plan).Error; err == nil {
+			subscriptionInfo = fiber.Map{
+				"plan_name":            plan.PlanName,
+				"daily_free_credits":   plan.DailyFreeCredits,
+				"room_duration_minutes": plan.RoomDurationMinutes,
+				"expires_at":           user.SubscriptionExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			}
+		}
+	}
+
 	var creditLogs []models.CreditLog
 	initializers.Db.Where("user_id = ?", user.ID).Order("created_at DESC").Limit(50).Find(&creditLogs)
 
 	return ctx.JSON(fiber.Map{
-		"balance": user.Credit,
-		"history": creditLogs,
+		"extra_credit":    user.Credit,
+		"free_credit":     user.FreeCredit,
+		"total_credit":    user.TotalCredits(),
+		"subscription":    subscriptionInfo,
+		"room_duration":   GetUserRoomDuration(user),
+		"history":         creditLogs,
 	})
 }
 
-// PaymentCallback handles payment gateway callbacks
-// This is a template for integrating external payment gateways
-func (c *PackageController) PaymentCallback(ctx *fiber.Ctx) error {
-	// Parse callback data from payment gateway
-	var callback struct {
-		ExternalID string `json:"external_id"`
-		Status     string `json:"status"` // success, failed, pending
-	}
-
-	if err := ctx.BodyParser(&callback); err != nil {
-		return ctx.Status(400).JSON(fiber.Map{"error": "Invalid callback data"})
-	}
-
-	var transaction models.Transaction
-	if err := initializers.Db.Where("external_id = ?", callback.ExternalID).First(&transaction).Error; err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"error": "Transaction not found"})
-	}
-
-	// Only process if still pending
-	if transaction.Status != models.TransactionStatusPending {
-		return ctx.JSON(fiber.Map{"status": "already_processed"})
-	}
-
-	switch callback.Status {
-	case "success":
-		var user models.User
-		if err := initializers.Db.Where("id = ?", transaction.UserID).First(&user).Error; err != nil {
-			return ctx.Status(500).JSON(fiber.Map{"error": "User not found"})
-		}
-		if err := c.settleTransaction(&transaction, &user); err != nil {
-			return ctx.Status(500).JSON(fiber.Map{"error": "Failed to settle transaction"})
-		}
-	case "failed":
-		transaction.Status = models.TransactionStatusFailed
-		initializers.Db.Save(&transaction)
-	case "expired":
-		transaction.Status = models.TransactionStatusExpired
-		initializers.Db.Save(&transaction)
-	}
-
-	return ctx.JSON(fiber.Map{"status": "ok"})
-}
+// ========================================
+// Helpers
+// ========================================
 
 func generateCreditLogID() string {
+	bytes := make([]byte, 16)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
+func generateTransactionID() string {
 	bytes := make([]byte, 16)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)

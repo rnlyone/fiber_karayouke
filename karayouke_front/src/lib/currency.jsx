@@ -1,103 +1,30 @@
-// Currency utility for locale-based pricing
+// Currency utility - IDR (Indonesian Rupiah) as primary currency via iPaymu
 
-const EXCHANGE_RATES = {
-	USD: 1,
-	IDR: 15800, // 1 USD = 15,800 IDR (approximate)
-	JPY: 149, // 1 USD = 149 JPY (approximate)
-};
-
-const CURRENCY_SYMBOLS = {
-	USD: '$',
-	IDR: 'Rp',
-	JPY: '¥',
-};
-
-const CURRENCY_LOCALES = {
-	USD: 'en-US',
-	IDR: 'id-ID',
-	JPY: 'ja-JP',
-};
-
-// Detect user's currency based on timezone/locale
-export const detectUserCurrency = () => {
+// Format price in IDR
+export const formatIDR = (amount) => {
 	try {
-		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-		const locale = navigator.language || navigator.userLanguage || '';
-
-		// Check for Japan
-		if (
-			timezone.includes('Tokyo') ||
-			timezone.includes('Japan') ||
-			locale.startsWith('ja')
-		) {
-			return 'JPY';
-		}
-
-		// Check for Indonesia
-		if (
-			timezone.includes('Jakarta') ||
-			timezone.includes('Makassar') ||
-			timezone.includes('Jayapura') ||
-			locale.startsWith('id')
-		) {
-			return 'IDR';
-		}
-
-		// Default to USD for all other locations
-		return 'USD';
-	} catch {
-		return 'USD';
-	}
-};
-
-// Convert price from USD (base) to target currency
-export const convertPrice = (priceInUSD, targetCurrency = 'USD') => {
-	const rate = EXCHANGE_RATES[targetCurrency] || 1;
-	return Math.round(priceInUSD * rate);
-};
-
-// Format price with currency symbol
-export const formatPrice = (amount, currency = 'USD') => {
-	const locale = CURRENCY_LOCALES[currency] || 'en-US';
-	
-	try {
-		return new Intl.NumberFormat(locale, {
+		return new Intl.NumberFormat('id-ID', {
 			style: 'currency',
-			currency: currency,
-			minimumFractionDigits: currency === 'JPY' ? 0 : (currency === 'IDR' ? 0 : 2),
-			maximumFractionDigits: currency === 'JPY' ? 0 : (currency === 'IDR' ? 0 : 2),
+			currency: 'IDR',
+			minimumFractionDigits: 0,
+			maximumFractionDigits: 0,
 		}).format(amount);
 	} catch {
-		const symbol = CURRENCY_SYMBOLS[currency] || '$';
-		return `${symbol}${amount.toLocaleString()}`;
+		return `Rp${Number(amount).toLocaleString('id-ID')}`;
 	}
 };
 
-// Get currency info
-export const getCurrencyInfo = (currency = 'USD') => ({
-	code: currency,
-	symbol: CURRENCY_SYMBOLS[currency] || '$',
-	rate: EXCHANGE_RATES[currency] || 1,
-	locale: CURRENCY_LOCALES[currency] || 'en-US',
-});
-
-// Create a currency context hook
-import { createContext, useContext, useState, useMemo } from 'react';
+// Create a currency context hook (simplified - always IDR)
+import { createContext, useContext, useMemo } from 'react';
 
 const CurrencyContext = createContext(null);
 
 export const CurrencyProvider = ({ children }) => {
-	// Detect currency once during initialization (no useEffect needed)
-	const [currency, setCurrency] = useState(() => detectUserCurrency());
-
 	const value = useMemo(() => ({
-		currency,
-		setCurrency,
-		convert: (priceInUSD) => convertPrice(priceInUSD, currency),
-		format: (amount) => formatPrice(amount, currency),
-		formatFromUSD: (priceInUSD) => formatPrice(convertPrice(priceInUSD, currency), currency),
-		info: getCurrencyInfo(currency),
-	}), [currency]);
+		currency: 'IDR',
+		format: (amount) => formatIDR(amount),
+		info: { code: 'IDR', symbol: 'Rp', locale: 'id-ID' },
+	}), []);
 
 	return (
 		<CurrencyContext.Provider value={value}>
@@ -114,11 +41,4 @@ export const useCurrency = () => {
 	return context;
 };
 
-export default {
-	detectUserCurrency,
-	convertPrice,
-	formatPrice,
-	getCurrencyInfo,
-	EXCHANGE_RATES,
-	CURRENCY_SYMBOLS,
-};
+export default { formatIDR };

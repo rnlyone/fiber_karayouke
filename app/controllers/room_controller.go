@@ -58,13 +58,18 @@ func (c *RoomController) Create(ctx *fiber.Ctx) error {
 		return ctx.Status(400).JSON(fiber.Map{"error": "Room name is required"})
 	}
 
-	// Check credit balance
+	// Reset free credits if needed
+	ResetFreeCreditIfNeeded(user)
+
+	// Check credit balance (free + extra)
 	creationCost := GetRoomCreationCost()
-	if user.Credit < creationCost {
+	if user.TotalCredits() < creationCost {
 		return ctx.Status(400).JSON(fiber.Map{
-			"error":          "Insufficient credits",
-			"required":       creationCost,
-			"current_credit": user.Credit,
+			"error":        "Insufficient credits",
+			"required":     creationCost,
+			"free_credit":  user.FreeCredit,
+			"extra_credit": user.Credit,
+			"total_credit": user.TotalCredits(),
 		})
 	}
 
@@ -86,18 +91,20 @@ func (c *RoomController) Create(ctx *fiber.Ctx) error {
 		RoomMaster:  user.ID,
 	}
 
-	// Deduct credits
-	user.Credit -= creationCost
+	// Deduct credits (free first, then extra)
+	if !user.DeductCredits(creationCost) {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Insufficient credits"})
+	}
 	if err := initializers.Db.Save(user).Error; err != nil {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to deduct credits"})
 	}
 
 	// Log credit deduction
 	creditLog := models.CreditLog{
-		ID:          generateRoomID(), // reuse ID generator
+		ID:          generateRoomID(),
 		UserID:      user.ID,
 		Amount:      -creationCost,
-		Balance:     user.Credit,
+		Balance:     user.TotalCredits(),
 		Type:        models.CreditTypeRoomCreation,
 		ReferenceID: room.ID,
 		Description: "Room creation: " + room.RoomName,
@@ -105,13 +112,14 @@ func (c *RoomController) Create(ctx *fiber.Ctx) error {
 	initializers.Db.Create(&creditLog)
 
 	if err := initializers.Db.Create(&room).Error; err != nil {
-		// Refund credits on failure
-		user.Credit += creationCost
+		// Refund credits on failure (add back to free first if was deducted from extra)
+		user.FreeCredit += creationCost
 		initializers.Db.Save(user)
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create room"})
 	}
 
-	maxDuration := GetRoomMaxDuration()
+	// Use user-specific room duration
+	maxDuration := GetUserRoomDuration(user)
 	expiredAt := room.GetExpiredAt(maxDuration)
 	formattedExpiredAt := expiredAt.Format("2006-01-02T15:04:05Z07:00")
 

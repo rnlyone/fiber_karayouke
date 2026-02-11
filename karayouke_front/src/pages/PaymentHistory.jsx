@@ -13,7 +13,7 @@ const API_BASE = (() => {
 const PaymentHistory = () => {
 	const navigate = useNavigate();
 	const { isAuthenticated, isLoading: authLoading } = useAuth();
-	const { formatFromUSD } = useCurrency();
+	const { format } = useCurrency();
 
 	const [transactions, setTransactions] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -63,11 +63,13 @@ const PaymentHistory = () => {
 
 	const getStatusBadge = (status) => {
 		const badges = {
+			settlement: { class: 'badge-success', label: 'Completed' },
 			completed: { class: 'badge-success', label: 'Completed' },
 			success: { class: 'badge-success', label: 'Completed' },
 			pending: { class: 'badge-pending', label: 'Pending' },
 			processing: { class: 'badge-pending', label: 'Processing' },
 			failed: { class: 'badge-failed', label: 'Failed' },
+			expired: { class: 'badge-failed', label: 'Expired' },
 			cancelled: { class: 'badge-failed', label: 'Cancelled' },
 			refunded: { class: 'badge-refunded', label: 'Refunded' },
 		};
@@ -133,7 +135,7 @@ const PaymentHistory = () => {
 						<span className="summary-icon">✅</span>
 						<div className="summary-info">
 							<span className="summary-value">
-								{transactions.filter((t) => t.status === 'completed' || t.status === 'success').length}
+							{transactions.filter((t) => t.status === 'settlement' || t.status === 'completed' || t.status === 'success').length}
 							</span>
 							<span className="summary-label">Successful</span>
 						</div>
@@ -143,7 +145,7 @@ const PaymentHistory = () => {
 						<div className="summary-info">
 							<span className="summary-value">
 								{transactions
-									.filter((t) => t.status === 'completed' || t.status === 'success')
+								.filter((t) => t.status === 'settlement' || t.status === 'completed' || t.status === 'success')
 									.reduce((sum, t) => sum + (t.credit_amount || 0), 0)}
 							</span>
 							<span className="summary-label">Credits Purchased</span>
@@ -160,8 +162,8 @@ const PaymentHistory = () => {
 						All
 					</button>
 					<button
-						className={`filter-btn ${filter === 'completed' ? 'active' : ''}`}
-						onClick={() => handleFilterChange('completed')}
+						className={`filter-btn ${filter === 'settlement' ? 'active' : ''}`}
+						onClick={() => handleFilterChange('settlement')}
 					>
 						Completed
 					</button>
@@ -205,16 +207,17 @@ const PaymentHistory = () => {
 						<div className="transactions-list">
 							{transactions.map((tx) => {
 								const badge = getStatusBadge(tx.status);
+								const isSubscription = tx.tx_type === 'subscription';
 								return (
-									<div key={tx.id} className="transaction-item">
+									<Link to={`/payment/status/${tx.id}`} key={tx.id} className="transaction-item">
 										<div className="transaction-left">
 											<div className="transaction-icon">
-												{tx.status === 'completed' || tx.status === 'success' ? '✅' : 
+												{tx.status === 'settlement' ? '✅' : 
 												 tx.status === 'pending' ? '⏳' : '❌'}
 											</div>
 											<div className="transaction-info">
-												<h3>{tx.package_name || 'Credit Purchase'}</h3>
-												<p className="transaction-id">ID: {tx.id}</p>
+												<h3>{tx.package_name || tx.plan_name || (isSubscription ? 'Subscription' : 'Extra Credits')}</h3>
+												<p className="transaction-id">{isSubscription ? '📋 Subscription' : '💎 Extra Credits'}</p>
 												<p className="transaction-date">
 													{formatDate(tx.created_at)} at {formatTime(tx.created_at)}
 												</p>
@@ -223,9 +226,9 @@ const PaymentHistory = () => {
 										<div className="transaction-right">
 											<div className="transaction-amount">
 												<span className="amount-main">
-													{formatFromUSD((tx.amount || 0) / 100)}
+													{format(tx.amount || 0)}
 												</span>
-												{tx.credit_amount && (
+												{!isSubscription && tx.credit_amount > 0 && (
 													<span className="credits-earned">+{tx.credit_amount} credits</span>
 												)}
 											</div>
@@ -233,7 +236,7 @@ const PaymentHistory = () => {
 												{badge.label}
 											</span>
 										</div>
-									</div>
+									</Link>
 								);
 							})}
 						</div>

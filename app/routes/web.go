@@ -24,6 +24,7 @@ func RegisterWebRoutes(app *fiber.App) {
 	roomController := &controllers.RoomController{}
 	adminController := &controllers.AdminController{}
 	packageController := &controllers.PackageController{}
+	ipaymuController := &controllers.IPaymuController{}
 
 	app.Get("", userController.Index)
 
@@ -53,6 +54,10 @@ func RegisterWebRoutes(app *fiber.App) {
 	admin.Post("/packages", adminController.CreatePackage)
 	admin.Put("/packages/:id", adminController.UpdatePackage)
 	admin.Delete("/packages/:id", adminController.DeletePackage)
+	admin.Get("/subscription-plans", adminController.ListSubscriptionPlans)
+	admin.Post("/subscription-plans", adminController.CreateSubscriptionPlan)
+	admin.Put("/subscription-plans/:id", adminController.UpdateSubscriptionPlan)
+	admin.Delete("/subscription-plans/:id", adminController.DeleteSubscriptionPlan)
 	admin.Get("/users", adminController.ListUsers)
 	admin.Get("/users/:id", adminController.GetUser)
 	admin.Post("/credits/award", adminController.AwardCredits)
@@ -60,20 +65,17 @@ func RegisterWebRoutes(app *fiber.App) {
 	admin.Put("/transactions/:id/status", adminController.UpdateTransactionStatus)
 	admin.Get("/rooms", adminController.ListRooms)
 
-	// Public package routes (for users to see available packages)
+	// Public package/plan routes
 	app.Get("/api/packages", packageController.ListPublic)
-	app.Post("/api/packages/:id/purchase", packageController.Purchase)
+	app.Get("/api/subscription-plans", packageController.ListSubscriptionPlans)
 	app.Get("/api/transactions", packageController.MyTransactions)
 	app.Get("/api/transactions/:id", packageController.GetTransaction)
 	app.Get("/api/credits", packageController.GetMyCredits)
-	app.Post("/api/payment/callback", packageController.PaymentCallback)
 
-	// Stripe payment routes
-	stripeController := &controllers.StripeController{}
-	app.Get("/api/stripe/config", stripeController.GetPublishableKey)
-	app.Post("/api/stripe/create-payment-intent", stripeController.CreatePaymentIntent)
-	app.Post("/api/stripe/confirm-payment", stripeController.ConfirmPayment)
-	app.Post("/api/stripe/webhook", stripeController.HandleWebhook)
+	// iPaymu payment routes
+	app.Post("/api/ipaymu/create-payment", ipaymuController.CreatePayment)
+	app.Post("/api/ipaymu/callback", ipaymuController.HandleCallback)
+	app.Get("/api/ipaymu/check/:id", ipaymuController.CheckTransaction)
 
 	// TV connection routes
 	tvController := &controllers.TVController{}

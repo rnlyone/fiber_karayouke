@@ -311,7 +311,7 @@ const RoomController = () => {
 						</button>
 					)}
 					<div className="interactive-emoji-group">
-						{['👏', '🤩', '🙌'].map((emoji) => (
+						{['👏', '🤩', '🎉'].map((emoji) => (
 							<button
 								key={emoji}
 								className="interactive-emoji-btn"

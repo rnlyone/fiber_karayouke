@@ -11,8 +11,7 @@ import (
 
 var modelsToMigrate = []interface{}{
 	&models.User{},
-	&models.Subscription{},
-	&models.UserSubscription{},
+	&models.SubscriptionPlan{},
 	&models.Package{},
 	&models.Room{},
 	&models.Song{},
@@ -68,6 +67,8 @@ func seedDefaults() {
 		{ID: uuid.New().String(), Key: models.ConfigRoomMaxDuration, Value: "120"}, // 2 hours default
 		{ID: uuid.New().String(), Key: models.ConfigRoomCreationCost, Value: "1"},  // 1 credit to create room
 		{ID: uuid.New().String(), Key: models.ConfigDefaultCredits, Value: "5"},    // 5 credits for new users
+		{ID: uuid.New().String(), Key: models.ConfigDailyFreeCredits, Value: "5"},  // 5 daily free credits
+		{ID: uuid.New().String(), Key: models.ConfigFreeRoomDuration, Value: "40"}, // 40 min room for free plan
 	}
 
 	for _, config := range defaultConfigs {
@@ -78,7 +79,7 @@ func seedDefaults() {
 		}
 	}
 
-	// Seed dummy package: 10 credits for 0 USD
+	// Seed dummy package: 10 credits for IDR 0
 	var dummyPackage models.Package
 	if initializers.Db.Where("package_name = ?", "Starter Pack").First(&dummyPackage).RowsAffected == 0 {
 		dummyPackage = models.Package{
@@ -86,10 +87,10 @@ func seedDefaults() {
 			PackageName:   "Starter Pack",
 			PackageDetail: []byte("Get 10 free credits to start your karaoke journey!"),
 			CreditAmount:  10,
-			Price:         "0",
+			Price:         0,
 			Visibility:    true,
 		}
 		initializers.Db.Create(&dummyPackage)
-		fmt.Println("Created dummy package: Starter Pack (10 credits for USD 0)")
+		fmt.Println("Created dummy package: Starter Pack (10 credits for IDR 0)")
 	}
 }

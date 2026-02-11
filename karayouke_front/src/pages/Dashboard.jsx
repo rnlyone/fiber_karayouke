@@ -17,7 +17,7 @@ const Dashboard = () => {
 	const [roomName, setRoomName] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [createError, setCreateError] = useState(null);
-	const [creditBalance, setCreditBalance] = useState(0);
+	const [creditInfo, setCreditInfo] = useState(null);
 	const [showExpiredRooms, setShowExpiredRooms] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const navigate = useNavigate();
@@ -44,13 +44,12 @@ const Dashboard = () => {
 		let isActive = true;
 		const fetchCredits = async () => {
 			if (!isAuthenticated) return;
-			setCreditBalance(user?.credit || 0);
 			try {
 				const response = await fetchWithAuth(`${API_BASE}/api/credits`);
 				if (!response.ok) return;
 				const data = await response.json();
-				if (isActive && typeof data.balance === 'number') {
-					setCreditBalance(data.balance);
+				if (isActive) {
+					setCreditInfo(data);
 				}
 			} catch {
 				// ignore
@@ -60,7 +59,7 @@ const Dashboard = () => {
 		return () => {
 			isActive = false;
 		};
-	}, [isAuthenticated, user?.credit]);
+	}, [isAuthenticated]);
 
 	const handleCreateRoom = async (event) => {
 		event.preventDefault();
@@ -210,11 +209,22 @@ const Dashboard = () => {
 						</div>
 						<div className="dashboard-info-grid">
 							<div className="dashboard-info-card">
-								<div className="dashboard-info-label">Credits Available</div>
-								<div className="dashboard-info-value">{creditBalance}</div>
-								<div className="dashboard-info-subtext">Use credits to create rooms</div>
+								<div className="dashboard-info-label">Total Credits</div>
+								<div className="dashboard-info-value">{creditInfo?.total_credit ?? user?.total_credit ?? 0}</div>
+								<div className="dashboard-info-subtext">
+									{creditInfo ? (
+										<>
+											🎁 {creditInfo.free_credit} free &nbsp;|&nbsp; 💎 {creditInfo.extra_credit} extra
+										</>
+									) : 'Use credits to create rooms'}
+								</div>
+								{creditInfo?.subscription?.plan_name && (
+									<div className="dashboard-info-subtext" style={{ marginTop: '4px', color: '#a78bfa' }}>
+										📋 {creditInfo.subscription.plan_name} &bull; {creditInfo.subscription.room_duration}min rooms
+									</div>
+								)}
 								<Link to="/packages" className="dashboard-buy-credits-btn">
-									Buy Credits
+									Get More Credits
 								</Link>
 							</div>
 							<div className="dashboard-info-card">

@@ -63,6 +63,9 @@ func (c *AdminController) GetConfigs(ctx *fiber.Ctx) error {
 		models.ConfigRoomMaxDuration:  "120", // 2 hours default
 		models.ConfigRoomCreationCost: "1",   // 1 credit default
 		models.ConfigDefaultCredits:   "0",   // 0 credits for new users
+		models.ConfigDailyFreeCredits: "5",   // 5 daily free credits for free plan
+		models.ConfigFreeRoomDuration: "40",  // 40 min room for free plan
+		models.ConfigIPaymuSandbox:    "true",
 	}
 	for key, defaultValue := range defaults {
 		if _, exists := configMap[key]; !exists {
@@ -143,6 +146,11 @@ func (c *AdminController) DeleteConfig(ctx *fiber.Ctx) error {
 		models.ConfigRoomMaxDuration,
 		models.ConfigRoomCreationCost,
 		models.ConfigDefaultCredits,
+		models.ConfigDailyFreeCredits,
+		models.ConfigFreeRoomDuration,
+		models.ConfigIPaymuVA,
+		models.ConfigIPaymuAPIKey,
+		models.ConfigIPaymuSandbox,
 	}
 	for _, critical := range criticalConfigs {
 		if key == critical {
@@ -204,7 +212,7 @@ func (c *AdminController) CreatePackage(ctx *fiber.Ctx) error {
 		ID:            generateID(),
 		PackageName:   req.PackageName,
 		PackageDetail: []byte(req.PackageDetail),
-		Price:         strconv.FormatInt(req.Price, 10),
+		Price:         req.Price,
 		CreditAmount:  req.CreditAmount,
 		Visibility:    req.Visibility,
 	}
@@ -234,7 +242,7 @@ func (c *AdminController) UpdatePackage(ctx *fiber.Ctx) error {
 
 	pkg.PackageName = req.PackageName
 	pkg.PackageDetail = []byte(req.PackageDetail)
-	pkg.Price = strconv.FormatInt(req.Price, 10)
+	pkg.Price = req.Price
 	pkg.CreditAmount = req.CreditAmount
 	pkg.Visibility = req.Visibility
 
@@ -263,11 +271,14 @@ func (c *AdminController) DeletePackage(ctx *fiber.Ctx) error {
 // ========================================
 
 type UserListResponse struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Credit   int    `json:"credit"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Username    string  `json:"username"`
+	Email       string  `json:"email"`
+	ExtraCredit int     `json:"extra_credit"`
+	FreeCredit  int     `json:"free_credit"`
+	TotalCredit int     `json:"total_credit"`
+	PlanName    *string `json:"plan_name"`
 }
 
 func (c *AdminController) ListUsers(ctx *fiber.Ctx) error {
@@ -301,12 +312,22 @@ func (c *AdminController) ListUsers(ctx *fiber.Ctx) error {
 
 	response := make([]UserListResponse, len(users))
 	for i, user := range users {
+		var planName *string
+		if user.SubscriptionPlanID != nil {
+			var plan models.SubscriptionPlan
+			if err := initializers.Db.Where("id = ?", *user.SubscriptionPlanID).First(&plan).Error; err == nil {
+				planName = &plan.PlanName
+			}
+		}
 		response[i] = UserListResponse{
-			ID:       user.ID,
-			Name:     user.Name,
-			Username: user.Username,
-			Email:    user.Email,
-			Credit:   user.Credit,
+			ID:          user.ID,
+			Name:        user.Name,
+			Username:    user.Username,
+			Email:       user.Email,
+			ExtraCredit: user.Credit,
+			FreeCredit:  user.FreeCredit,
+			TotalCredit: user.TotalCredits(),
+			PlanName:    planName,
 		}
 	}
 
@@ -334,13 +355,24 @@ func (c *AdminController) GetUser(ctx *fiber.Ctx) error {
 	var creditLogs []models.CreditLog
 	initializers.Db.Where("user_id = ?", userID).Order("created_at DESC").Limit(50).Find(&creditLogs)
 
+	var planName *string
+	if user.SubscriptionPlanID != nil {
+		var plan models.SubscriptionPlan
+		if err := initializers.Db.Where("id = ?", *user.SubscriptionPlanID).First(&plan).Error; err == nil {
+			planName = &plan.PlanName
+		}
+	}
+
 	return ctx.JSON(fiber.Map{
 		"user": UserListResponse{
-			ID:       user.ID,
-			Name:     user.Name,
-			Username: user.Username,
-			Email:    user.Email,
-			Credit:   user.Credit,
+			ID:          user.ID,
+			Name:        user.Name,
+			Username:    user.Username,
+			Email:       user.Email,
+			ExtraCredit: user.Credit,
+			FreeCredit:  user.FreeCredit,
+			TotalCredit: user.TotalCredits(),
+			PlanName:    planName,
 		},
 		"credit_logs": creditLogs,
 	})
@@ -353,6 +385,7 @@ func (c *AdminController) GetUser(ctx *fiber.Ctx) error {
 type AwardCreditsRequest struct {
 	UserID      string `json:"user_id"`
 	Amount      int    `json:"amount"`
+	CreditType  string `json:"credit_type"` // "extra" or "free"
 	Description string `json:"description"`
 }
 
@@ -370,18 +403,34 @@ func (c *AdminController) AwardCredits(ctx *fiber.Ctx) error {
 		return ctx.Status(400).JSON(fiber.Map{"error": "Amount cannot be zero"})
 	}
 
+	// Default to extra credit
+	if req.CreditType == "" {
+		req.CreditType = "extra"
+	}
+	if req.CreditType != "extra" && req.CreditType != "free" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "credit_type must be 'extra' or 'free'"})
+	}
+
 	var user models.User
 	if err := initializers.Db.Where("id = ?", req.UserID).First(&user).Error; err != nil {
 		return ctx.Status(404).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	// Update user credits
-	newBalance := user.Credit + req.Amount
-	if newBalance < 0 {
-		return ctx.Status(400).JSON(fiber.Map{"error": "Cannot reduce credits below zero"})
+	var newBalance int
+	if req.CreditType == "free" {
+		newBalance = user.FreeCredit + req.Amount
+		if newBalance < 0 {
+			return ctx.Status(400).JSON(fiber.Map{"error": "Cannot reduce free credits below zero"})
+		}
+		user.FreeCredit = newBalance
+	} else {
+		newBalance = user.Credit + req.Amount
+		if newBalance < 0 {
+			return ctx.Status(400).JSON(fiber.Map{"error": "Cannot reduce extra credits below zero"})
+		}
+		user.Credit = newBalance
 	}
 
-	user.Credit = newBalance
 	if err := initializers.Db.Save(&user).Error; err != nil {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to update user credits"})
 	}
@@ -390,9 +439,9 @@ func (c *AdminController) AwardCredits(ctx *fiber.Ctx) error {
 	description := req.Description
 	if description == "" {
 		if req.Amount > 0 {
-			description = "Admin credit award"
+			description = "Admin " + req.CreditType + " credit award"
 		} else {
-			description = "Admin credit deduction"
+			description = "Admin " + req.CreditType + " credit deduction"
 		}
 	}
 
@@ -400,7 +449,7 @@ func (c *AdminController) AwardCredits(ctx *fiber.Ctx) error {
 		ID:          generateID(),
 		UserID:      user.ID,
 		Amount:      req.Amount,
-		Balance:     newBalance,
+		Balance:     user.TotalCredits(),
 		Type:        models.CreditTypeAdminAward,
 		ReferenceID: "",
 		Description: description,
@@ -409,9 +458,11 @@ func (c *AdminController) AwardCredits(ctx *fiber.Ctx) error {
 	initializers.Db.Create(&creditLog)
 
 	return ctx.JSON(fiber.Map{
-		"success":     true,
-		"new_balance": newBalance,
-		"credit_log":  creditLog,
+		"success":      true,
+		"credit_type":  req.CreditType,
+		"new_balance":  newBalance,
+		"total_credit": user.TotalCredits(),
+		"credit_log":   creditLog,
 	})
 }
 
@@ -436,7 +487,7 @@ func (c *AdminController) ListTransactions(ctx *fiber.Ctx) error {
 	var transactions []models.Transaction
 	var total int64
 
-	query := initializers.Db.Model(&models.Transaction{}).Preload("User").Preload("Package")
+	query := initializers.Db.Model(&models.Transaction{}).Preload("User").Preload("Package").Preload("Plan")
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -491,35 +542,53 @@ func (c *AdminController) UpdateTransactionStatus(ctx *fiber.Ctx) error {
 	}
 
 	var transaction models.Transaction
-	if err := initializers.Db.Where("id = ?", transactionID).Preload("Package").First(&transaction).Error; err != nil {
+	if err := initializers.Db.Where("id = ?", transactionID).Preload("Package").Preload("Plan").First(&transaction).Error; err != nil {
 		return ctx.Status(404).JSON(fiber.Map{"error": "Transaction not found"})
 	}
 
 	oldStatus := transaction.Status
 	transaction.Status = req.Status
 
-	// If transitioning to settlement, award credits
+	// If transitioning to settlement, use settleTransaction logic
 	if oldStatus != models.TransactionStatusSettlement && req.Status == models.TransactionStatusSettlement {
 		now := time.Now()
 		transaction.PaidAt = &now
 
-		// Award credits
 		var user models.User
 		if err := initializers.Db.Where("id = ?", transaction.UserID).First(&user).Error; err == nil {
-			user.Credit += transaction.Package.CreditAmount
-			initializers.Db.Save(&user)
+			if transaction.TxType == models.TxTypeSubscription && transaction.Plan != nil {
+				// Activate subscription
+				user.SubscriptionPlanID = &transaction.Plan.ID
+				expiresAt := now.AddDate(0, 0, transaction.Plan.BillingPeriodDays)
+				user.SubscriptionExpiresAt = &expiresAt
+				initializers.Db.Save(&user)
 
-			// Log credit
-			creditLog := models.CreditLog{
-				ID:          generateID(),
-				UserID:      user.ID,
-				Amount:      transaction.Package.CreditAmount,
-				Balance:     user.Credit,
-				Type:        models.CreditTypePurchase,
-				ReferenceID: transaction.ID,
-				Description: "Purchase: " + transaction.Package.PackageName,
+				creditLog := models.CreditLog{
+					ID:          generateID(),
+					UserID:      user.ID,
+					Amount:      0,
+					Balance:     user.TotalCredits(),
+					Type:        models.CreditTypeSubscription,
+					ReferenceID: transaction.ID,
+					Description: "Subscription activated: " + transaction.Plan.PlanName,
+				}
+				initializers.Db.Create(&creditLog)
+			} else if transaction.Package != nil {
+				// Award extra credits
+				user.Credit += transaction.Package.CreditAmount
+				initializers.Db.Save(&user)
+
+				creditLog := models.CreditLog{
+					ID:          generateID(),
+					UserID:      user.ID,
+					Amount:      transaction.Package.CreditAmount,
+					Balance:     user.TotalCredits(),
+					Type:        models.CreditTypePurchase,
+					ReferenceID: transaction.ID,
+					Description: "Purchase: " + transaction.Package.PackageName,
+				}
+				initializers.Db.Create(&creditLog)
 			}
-			initializers.Db.Create(&creditLog)
 		}
 	}
 
@@ -528,6 +597,116 @@ func (c *AdminController) UpdateTransactionStatus(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.JSON(transaction)
+}
+
+// ========================================
+// SUBSCRIPTION PLAN MANAGEMENT
+// ========================================
+
+type CreateSubscriptionPlanRequest struct {
+	PlanName            string `json:"plan_name"`
+	PlanDetail          string `json:"plan_detail"`
+	Price               int64  `json:"price"` // IDR
+	BillingPeriodDays   int    `json:"billing_period_days"`
+	DailyFreeCredits    int    `json:"daily_free_credits"`
+	RoomDurationMinutes int    `json:"room_duration_minutes"`
+	SortOrder           int    `json:"sort_order"`
+	Visibility          bool   `json:"visibility"`
+}
+
+func (c *AdminController) ListSubscriptionPlans(ctx *fiber.Ctx) error {
+	var plans []models.SubscriptionPlan
+	if err := initializers.Db.Order("sort_order ASC, price ASC").Find(&plans).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch subscription plans"})
+	}
+	return ctx.JSON(plans)
+}
+
+func (c *AdminController) CreateSubscriptionPlan(ctx *fiber.Ctx) error {
+	var req CreateSubscriptionPlanRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.PlanName == "" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Plan name is required"})
+	}
+	if req.BillingPeriodDays <= 0 {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Billing period must be positive"})
+	}
+
+	plan := models.SubscriptionPlan{
+		ID:                  generateID(),
+		PlanName:            req.PlanName,
+		PlanDetail:          []byte(req.PlanDetail),
+		Price:               req.Price,
+		BillingPeriodDays:   req.BillingPeriodDays,
+		DailyFreeCredits:    req.DailyFreeCredits,
+		RoomDurationMinutes: req.RoomDurationMinutes,
+		SortOrder:           req.SortOrder,
+		Visibility:          req.Visibility,
+	}
+
+	if err := initializers.Db.Create(&plan).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create subscription plan"})
+	}
+
+	return ctx.Status(201).JSON(plan)
+}
+
+func (c *AdminController) UpdateSubscriptionPlan(ctx *fiber.Ctx) error {
+	planID := ctx.Params("id")
+	if planID == "" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Plan ID is required"})
+	}
+
+	var plan models.SubscriptionPlan
+	if err := initializers.Db.Where("id = ?", planID).First(&plan).Error; err != nil {
+		return ctx.Status(404).JSON(fiber.Map{"error": "Subscription plan not found"})
+	}
+
+	var req CreateSubscriptionPlanRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	plan.PlanName = req.PlanName
+	plan.PlanDetail = []byte(req.PlanDetail)
+	plan.Price = req.Price
+	plan.BillingPeriodDays = req.BillingPeriodDays
+	plan.DailyFreeCredits = req.DailyFreeCredits
+	plan.RoomDurationMinutes = req.RoomDurationMinutes
+	plan.SortOrder = req.SortOrder
+	plan.Visibility = req.Visibility
+
+	if err := initializers.Db.Save(&plan).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to update subscription plan"})
+	}
+
+	return ctx.JSON(plan)
+}
+
+func (c *AdminController) DeleteSubscriptionPlan(ctx *fiber.Ctx) error {
+	planID := ctx.Params("id")
+	if planID == "" {
+		return ctx.Status(400).JSON(fiber.Map{"error": "Plan ID is required"})
+	}
+
+	// Check if any users are on this plan
+	var count int64
+	initializers.Db.Model(&models.User{}).Where("subscription_plan_id = ?", planID).Count(&count)
+	if count > 0 {
+		return ctx.Status(400).JSON(fiber.Map{
+			"error":       "Cannot delete plan with active subscribers",
+			"subscribers": count,
+		})
+	}
+
+	if err := initializers.Db.Where("id = ?", planID).Delete(&models.SubscriptionPlan{}).Error; err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to delete subscription plan"})
+	}
+
+	return ctx.JSON(fiber.Map{"success": true})
 }
 
 // ========================================
@@ -601,6 +780,8 @@ func (c *AdminController) GetDashboardStats(ctx *fiber.Ctx) error {
 	var totalPackages int64
 	var totalRevenue int64
 	var totalCreditsAwarded int64
+	var totalSubscriptionPlans int64
+	var activeSubscribers int64
 
 	now := time.Now()
 
@@ -628,6 +809,10 @@ func (c *AdminController) GetDashboardStats(ctx *fiber.Ctx) error {
 		Select("COALESCE(SUM(amount),0)").Scan(&totalRevenue)
 	initializers.Db.Model(&models.CreditLog{}).Where("amount > 0").
 		Select("COALESCE(SUM(amount),0)").Scan(&totalCreditsAwarded)
+	initializers.Db.Model(&models.SubscriptionPlan{}).Count(&totalSubscriptionPlans)
+	initializers.Db.Model(&models.User{}).
+		Where("subscription_plan_id IS NOT NULL AND subscription_expires_at > ?", now).
+		Count(&activeSubscribers)
 
 	// Recap periods
 	last24h := now.Add(-24 * time.Hour)
@@ -694,17 +879,19 @@ func (c *AdminController) GetDashboardStats(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.JSON(fiber.Map{
-		"totalUsers":          totalUsers,
-		"totalRooms":          totalRooms,
-		"activeRooms":         activeRooms,
-		"expiredRooms":        expiredRooms,
-		"totalTransactions":   totalTransactions,
-		"pendingTransactions": pendingTransactions,
-		"settledTransactions": settledTransactions,
-		"failedTransactions":  failedTransactions,
-		"totalPackages":       totalPackages,
-		"totalRevenue":        totalRevenue,
-		"totalCreditsAwarded": totalCreditsAwarded,
+		"totalUsers":             totalUsers,
+		"totalRooms":             totalRooms,
+		"activeRooms":            activeRooms,
+		"expiredRooms":           expiredRooms,
+		"totalTransactions":      totalTransactions,
+		"pendingTransactions":    pendingTransactions,
+		"settledTransactions":    settledTransactions,
+		"failedTransactions":     failedTransactions,
+		"totalPackages":          totalPackages,
+		"totalRevenue":           totalRevenue,
+		"totalCreditsAwarded":    totalCreditsAwarded,
+		"totalSubscriptionPlans": totalSubscriptionPlans,
+		"activeSubscribers":      activeSubscribers,
 		"recaps": fiber.Map{
 			"last24h": getRecap(last24h),
 			"last7d":  getRecap(last7d),

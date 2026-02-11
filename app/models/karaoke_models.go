@@ -3,51 +3,73 @@ package models
 import "time"
 
 // Karaoke domain models representing the collaborative playlist schema.
-type Subscription struct {
-	ID            string `gorm:"column:id;primaryKey" json:"id"`
-	PackageName   string `gorm:"column:package_name" json:"package_name"`
-	PackageDetail []byte `gorm:"column:package_detail" json:"package_detail"`
-	Price         string `gorm:"column:price" json:"price"`
-	Visibility    bool   `gorm:"column:visibility" json:"visibility"`
+
+// SubscriptionPlan defines available subscription tiers (free, basic, pro, etc.)
+type SubscriptionPlan struct {
+	ID                  string `gorm:"column:id;primaryKey" json:"id"`
+	PlanName            string `gorm:"column:plan_name" json:"plan_name"`
+	PlanDetail          []byte `gorm:"column:plan_detail" json:"plan_detail"`
+	Price               int64  `gorm:"column:price" json:"price"`                                 // Price in IDR (0 for free plan)
+	BillingPeriodDays   int    `gorm:"column:billing_period_days" json:"billing_period_days"`     // e.g. 30 for monthly
+	DailyFreeCredits    int    `gorm:"column:daily_free_credits" json:"daily_free_credits"`       // Free credits reset daily
+	RoomDurationMinutes int    `gorm:"column:room_duration_minutes" json:"room_duration_minutes"` // Room duration in minutes
+	SortOrder           int    `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Visibility          bool   `gorm:"column:visibility" json:"visibility"`
 }
 
-func (Subscription) TableName() string {
-	return "subscriptions"
-}
-
-type UserSubscription struct {
-	ID             string     `gorm:"column:id;primaryKey" json:"id"`
-	SubscriptionID string     `gorm:"column:id_subs" json:"subscription_id"`
-	UserID         string     `gorm:"column:id_user" json:"user_id"`
-	PurchaseStamp  time.Time  `gorm:"column:purchase_stamp" json:"purchase_stamp"`
-	ExpiredAt      *time.Time `gorm:"column:expired_at" json:"expired_at"`
-
-	Subscription Subscription `gorm:"foreignKey:SubscriptionID;references:ID" json:"subscription"`
-	User         User         `gorm:"foreignKey:UserID;references:ID" json:"user"`
-}
-
-func (UserSubscription) TableName() string {
-	return "user_subs"
+func (SubscriptionPlan) TableName() string {
+	return "subscription_plans"
 }
 
 type User struct {
-	ID       string `gorm:"column:id;primaryKey" json:"id"`
-	Name     string `gorm:"column:name" json:"name"`
-	Username string `gorm:"column:username" json:"username"`
-	Email    string `gorm:"column:email" json:"email"`
-	Password string `gorm:"column:password" json:"-"`
-	Credit   int    `gorm:"column:credit" json:"credit"`
+	ID                    string     `gorm:"column:id;primaryKey" json:"id"`
+	Name                  string     `gorm:"column:name" json:"name"`
+	Username              string     `gorm:"column:username" json:"username"`
+	Email                 string     `gorm:"column:email" json:"email"`
+	Password              string     `gorm:"column:password" json:"-"`
+	Credit                int        `gorm:"column:credit" json:"extra_credit"`                             // Extra credits (purchased, never expire)
+	FreeCredit            int        `gorm:"column:free_credit;default:0" json:"free_credit"`               // Daily free credits (reset daily)
+	FreeCreditResetAt     *time.Time `gorm:"column:free_credit_reset_at" json:"free_credit_reset_at"`       // Last reset timestamp
+	SubscriptionPlanID    *string    `gorm:"column:subscription_plan_id" json:"subscription_plan_id"`       // Current subscription plan
+	SubscriptionExpiresAt *time.Time `gorm:"column:subscription_expires_at" json:"subscription_expires_at"` // When subscription expires
 }
 
 func (User) TableName() string {
 	return "users"
 }
 
+// TotalCredits returns free credits + extra credits
+func (u *User) TotalCredits() int {
+	return u.FreeCredit + u.Credit
+}
+
+// DeductCredits deducts credits using free credits first, then extra credits.
+// Returns false if insufficient total credits.
+func (u *User) DeductCredits(amount int) bool {
+	if u.TotalCredits() < amount {
+		return false
+	}
+	if u.FreeCredit >= amount {
+		u.FreeCredit -= amount
+	} else {
+		remainder := amount - u.FreeCredit
+		u.FreeCredit = 0
+		u.Credit -= remainder
+	}
+	return true
+}
+
+// HasActiveSubscription checks if the user has a non-expired paid subscription
+func (u *User) HasActiveSubscription() bool {
+	return u.SubscriptionPlanID != nil && u.SubscriptionExpiresAt != nil && u.SubscriptionExpiresAt.After(time.Now())
+}
+
+// Package represents an extra credit package (one-time purchase)
 type Package struct {
 	ID            string `gorm:"column:id;primaryKey" json:"id"`
 	PackageName   string `gorm:"column:package_name" json:"package_name"`
 	PackageDetail []byte `gorm:"column:package_detail" json:"package_detail"`
-	Price         string `gorm:"column:price" json:"price"`
+	Price         int64  `gorm:"column:price" json:"price"` // Price in IDR
 	CreditAmount  int    `gorm:"column:credit_amount" json:"credit_amount"`
 	Visibility    bool   `gorm:"column:visibility" json:"visibility"`
 }
@@ -142,18 +164,21 @@ func (SystemConfig) TableName() string {
 
 // Transaction represents a payment transaction
 type Transaction struct {
-	ID            string     `gorm:"column:id;primaryKey" json:"id"`
-	UserID        string     `gorm:"column:user_id" json:"user_id"`
-	PackageID     string     `gorm:"column:package_id" json:"package_id"`
-	Amount        int64      `gorm:"column:amount" json:"amount"`
-	Status        string     `gorm:"column:status" json:"status"` // pending, settlement, failed, expired, refunded
-	PaymentMethod string     `gorm:"column:payment_method" json:"payment_method"`
-	ExternalID    string     `gorm:"column:external_id" json:"external_id"` // For payment gateway reference
-	CreatedAt     time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	PaidAt        *time.Time `gorm:"column:paid_at" json:"paid_at"`
-	User          User       `gorm:"foreignKey:UserID;references:ID" json:"user"`
-	Package       Package    `gorm:"foreignKey:PackageID;references:ID" json:"package"`
+	ID            string            `gorm:"column:id;primaryKey" json:"id"`
+	UserID        string            `gorm:"column:user_id" json:"user_id"`
+	PackageID     *string           `gorm:"column:package_id" json:"package_id"`         // For extra credit purchases
+	PlanID        *string           `gorm:"column:plan_id" json:"plan_id"`               // For subscription purchases
+	Amount        int64             `gorm:"column:amount" json:"amount"`                 // Amount in IDR
+	Status        string            `gorm:"column:status" json:"status"`                 // pending, settlement, failed, expired, refunded
+	PaymentMethod string            `gorm:"column:payment_method" json:"payment_method"` // ipaymu, free
+	TxType        string            `gorm:"column:tx_type" json:"tx_type"`               // extra_credit, subscription
+	ExternalID    string            `gorm:"column:external_id" json:"external_id"`       // iPaymu transaction ID
+	CreatedAt     time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time         `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	PaidAt        *time.Time        `gorm:"column:paid_at" json:"paid_at"`
+	User          User              `gorm:"foreignKey:UserID;references:ID" json:"user"`
+	Package       *Package          `gorm:"foreignKey:PackageID;references:ID" json:"package"`
+	Plan          *SubscriptionPlan `gorm:"foreignKey:PlanID;references:ID" json:"plan"`
 }
 
 func (Transaction) TableName() string {
@@ -171,9 +196,20 @@ const (
 
 // System config key constants
 const (
-	ConfigRoomMaxDuration  = "room_max_duration"  // in minutes
+	ConfigRoomMaxDuration  = "room_max_duration"  // in minutes (fallback for free plan)
 	ConfigRoomCreationCost = "room_creation_cost" // credits required
-	ConfigDefaultCredits   = "default_credits"    // credits for new users
+	ConfigDefaultCredits   = "default_credits"    // extra credits for new users
+	ConfigDailyFreeCredits = "daily_free_credits" // daily free credits for free plan (default: 5)
+	ConfigFreeRoomDuration = "free_room_duration" // room duration in minutes for free plan (default: 40)
+	ConfigIPaymuVA         = "ipaymu_va"          // iPaymu Virtual Account
+	ConfigIPaymuAPIKey     = "ipaymu_api_key"     // iPaymu API Key
+	ConfigIPaymuSandbox    = "ipaymu_sandbox"     // "true" or "false"
+)
+
+// Transaction type constants
+const (
+	TxTypeExtraCredit  = "extra_credit"
+	TxTypeSubscription = "subscription"
 )
 
 // CreditLog tracks credit changes
@@ -196,8 +232,10 @@ func (CreditLog) TableName() string {
 // Credit log type constants
 const (
 	CreditTypeAdminAward   = "admin_award"
-	CreditTypePurchase     = "purchase"
+	CreditTypePurchase     = "purchase" // Extra credit purchase
 	CreditTypeRoomCreation = "room_creation"
+	CreditTypeFreeReset    = "free_reset"   // Daily free credit reset
+	CreditTypeSubscription = "subscription" // Subscription activation
 	CreditTypeRefund       = "refund"
 )
 

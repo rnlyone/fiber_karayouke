@@ -32,15 +32,48 @@ type AuthResponse struct {
 }
 
 type UserResponse struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Credit   int    `json:"credit"`
+	ID                    string  `json:"id"`
+	Name                  string  `json:"name"`
+	Username              string  `json:"username"`
+	Email                 string  `json:"email"`
+	ExtraCredit           int     `json:"extra_credit"`
+	FreeCredit            int     `json:"free_credit"`
+	TotalCredit           int     `json:"total_credit"`
+	SubscriptionPlanName  *string `json:"subscription_plan_name"`
+	SubscriptionExpiresAt *string `json:"subscription_expires_at"`
+	RoomDuration          int     `json:"room_duration"`
 }
 
 // Session duration: 30 days
 const sessionDuration = 30 * 24 * time.Hour
+
+// buildUserResponse creates a UserResponse from a User model, including subscription info
+func buildUserResponse(user *models.User) UserResponse {
+	// Reset free credits if needed
+	ResetFreeCreditIfNeeded(user)
+
+	resp := UserResponse{
+		ID:           user.ID,
+		Name:         user.Name,
+		Username:     user.Username,
+		Email:        user.Email,
+		ExtraCredit:  user.Credit,
+		FreeCredit:   user.FreeCredit,
+		TotalCredit:  user.TotalCredits(),
+		RoomDuration: GetUserRoomDuration(user),
+	}
+
+	if user.HasActiveSubscription() {
+		var plan models.SubscriptionPlan
+		if err := initializers.Db.Where("id = ?", *user.SubscriptionPlanID).First(&plan).Error; err == nil {
+			resp.SubscriptionPlanName = &plan.PlanName
+		}
+		expiresStr := user.SubscriptionExpiresAt.Format("2006-01-02T15:04:05Z07:00")
+		resp.SubscriptionExpiresAt = &expiresStr
+	}
+
+	return resp
+}
 
 func generateID() string {
 	bytes := make([]byte, 16)
@@ -139,13 +172,7 @@ func (c *AuthController) Register(ctx *fiber.Ctx) error {
 
 	return ctx.JSON(AuthResponse{
 		Token: token,
-		User: UserResponse{
-			ID:       user.ID,
-			Name:     user.Name,
-			Username: user.Username,
-			Email:    user.Email,
-			Credit:   user.Credit,
-		},
+		User:  buildUserResponse(&user),
 	})
 }
 
@@ -175,13 +202,7 @@ func (c *AuthController) Login(ctx *fiber.Ctx) error {
 
 	return ctx.JSON(AuthResponse{
 		Token: token,
-		User: UserResponse{
-			ID:       user.ID,
-			Name:     user.Name,
-			Username: user.Username,
-			Email:    user.Email,
-			Credit:   user.Credit,
-		},
+		User:  buildUserResponse(&user),
 	})
 }
 
@@ -201,13 +222,7 @@ func (c *AuthController) Me(ctx *fiber.Ctx) error {
 		return ctx.Status(401).JSON(fiber.Map{"error": "Invalid or expired token"})
 	}
 
-	return ctx.JSON(UserResponse{
-		ID:       user.ID,
-		Name:     user.Name,
-		Username: user.Username,
-		Email:    user.Email,
-		Credit:   user.Credit,
-	})
+	return ctx.JSON(buildUserResponse(user))
 }
 
 func (c *AuthController) Logout(ctx *fiber.Ctx) error {
