@@ -355,6 +355,7 @@ const Dashboard = () => {
 						<Link to="/faq">FAQ</Link>
 						<Link to="/terms">Terms &amp; Conditions</Link>
 						<Link to="/refund-policy">Refund Policy</Link>
+						<Link to="/credits">Credits</Link>
 					</div>
 					<div className="site-footer-contact">
 						<p><a href="mailto:ask@karayouke.com">ask@karayouke.com</a></p>

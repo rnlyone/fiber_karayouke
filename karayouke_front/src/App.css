@@ -4842,3 +4842,180 @@
   }
 }
 
+/* ==========================================
+   Credits Page
+   ========================================== */
+
+.credits-hero {
+  text-align: center;
+  padding: 32px 0 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.credits-icon {
+  font-size: 3rem;
+  line-height: 1;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.credits-hero h1 {
+  text-align: center;
+  margin: 0;
+}
+
+.credits-tagline {
+  color: #94a3b8;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.credits-version {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 4px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+}
+
+.credits-section {
+  margin-bottom: 36px;
+}
+
+.credits-section h2 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  margin: 0 0 16px;
+}
+
+.credits-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.credits-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #a78bfa);
+  display: grid;
+  place-items: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.credits-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.credits-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.credits-email {
+  color: #818cf8;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.credits-email:hover {
+  text-decoration: underline;
+}
+
+.credits-tech-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.credits-tech {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 10px;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.credits-tech-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.credits-contact-list p {
+  color: #94a3b8;
+  margin: 0 0 8px;
+  line-height: 1.6;
+}
+
+.credits-contact-list a {
+  color: #818cf8;
+  text-decoration: none;
+}
+
+.credits-contact-list a:hover {
+  text-decoration: underline;
+}
+
+.credits-footer {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  text-align: center;
+}
+
+.credits-footer p {
+  color: #475569;
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.credits-links {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.credits-links a {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+
+.credits-links a:hover {
+  color: #818cf8;
+}
+
+@media (max-width: 600px) {
+  .credits-tech-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+

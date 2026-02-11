@@ -19,6 +19,7 @@ import TVConnect from './pages/TVConnect.jsx';
 import FAQ from './pages/FAQ.jsx';
 import RefundPolicy from './pages/RefundPolicy.jsx';
 import TermsAndConditions from './pages/TermsAndConditions.jsx';
+import Credits from './pages/Credits.jsx';
 import {
 	AdminDashboard,
 	AdminSettings,
@@ -60,6 +61,7 @@ function App() {
 					<Route path="/faq" element={<FAQ />} />
 					<Route path="/refund-policy" element={<RefundPolicy />} />
 					<Route path="/terms" element={<TermsAndConditions />} />
+					<Route path="/credits" element={<Credits />} />
 					<Route path="*" element={<Navigate to="/" replace />} />
 				</Routes>
 			</CurrencyProvider>
