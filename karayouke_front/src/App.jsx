@@ -16,6 +16,9 @@ import PaymentStatus from './pages/PaymentStatus.jsx';
 import PaymentHistory from './pages/PaymentHistory.jsx';
 import TVPage from './pages/TVPage.jsx';
 import TVConnect from './pages/TVConnect.jsx';
+import FAQ from './pages/FAQ.jsx';
+import RefundPolicy from './pages/RefundPolicy.jsx';
+import TermsAndConditions from './pages/TermsAndConditions.jsx';
 import {
 	AdminDashboard,
 	AdminSettings,
@@ -53,6 +56,10 @@ function App() {
 					<Route path="/admin/users" element={<AdminUsers />} />
 					<Route path="/admin/transactions" element={<AdminTransactions />} />
 					<Route path="/admin/rooms" element={<AdminRooms />} />
+					{/* Legal & info pages */}
+					<Route path="/faq" element={<FAQ />} />
+					<Route path="/refund-policy" element={<RefundPolicy />} />
+					<Route path="/terms" element={<TermsAndConditions />} />
 					<Route path="*" element={<Navigate to="/" replace />} />
 				</Routes>
 			</CurrencyProvider>
