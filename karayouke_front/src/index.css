@@ -220,11 +220,10 @@ body {
 
 /* Interactive Card */
 .controller-interactive-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
   padding: 18px;
   border-radius: 16px;
   background: linear-gradient(145deg, rgba(17, 28, 50, 0.9), rgba(14, 23, 42, 0.95));
@@ -233,8 +232,9 @@ body {
 }
 
 .interactive-settings-btn {
-  width: 42px;
-  height: 42px;
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -257,14 +257,13 @@ body {
 }
 
 .interactive-emoji-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: contents;
 }
 
 .interactive-emoji-btn {
-  width: 48px;
-  height: 48px;
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -370,8 +369,10 @@ body {
   }
 
   .controller-interactive-card {
+    display: flex;
     flex-direction: row;
     justify-content: center;
+    align-items: center;
     padding: 12px 16px;
     gap: 12px;
   }
@@ -379,9 +380,11 @@ body {
   .interactive-settings-btn {
     width: 40px;
     height: 40px;
+    min-height: 40px;
   }
 
   .interactive-emoji-group {
+    display: flex;
     flex-direction: row;
     gap: 8px;
   }
@@ -389,6 +392,7 @@ body {
   .interactive-emoji-btn {
     width: 44px;
     height: 44px;
+    min-height: 44px;
     font-size: 1.4rem;
   }
 }
