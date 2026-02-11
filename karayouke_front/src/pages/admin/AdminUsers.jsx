@@ -17,6 +17,7 @@ const AdminUsers = () => {
 	const [showAwardModal, setShowAwardModal] = useState(false);
 	const [awardAmount, setAwardAmount] = useState('');
 	const [awardReason, setAwardReason] = useState('');
+	const [awardCreditType, setAwardCreditType] = useState('extra');
 	const [awarding, setAwarding] = useState(false);
 	const parsedAwardAmount = Number(awardAmount);
 	const isAwardAmountValid = Number.isFinite(parsedAwardAmount) && parsedAwardAmount !== 0;
@@ -42,6 +43,7 @@ const AdminUsers = () => {
 		setSelectedUser(user);
 		setAwardAmount('');
 		setAwardReason('');
+		setAwardCreditType('extra');
 		setShowAwardModal(true);
 	};
 
@@ -63,6 +65,7 @@ const AdminUsers = () => {
 					body: JSON.stringify({
 						user_id: selectedUser.id,
 						amount,
+						credit_type: awardCreditType,
 						description: awardReason || 'Admin award',
 					}),
 				}
@@ -93,7 +96,8 @@ const AdminUsers = () => {
 								<tr>
 									<th>User</th>
 									<th>Email</th>
-									<th>Credits</th>
+									<th>Free / Extra Credits</th>
+									<th>Plan</th>
 									<th>Rooms</th>
 									<th>Joined</th>
 									<th>Actions</th>
@@ -102,7 +106,7 @@ const AdminUsers = () => {
 							<tbody>
 								{users.length === 0 ? (
 									<tr>
-										<td colSpan="6" className="admin-table-empty">
+										<td colSpan="7" className="admin-table-empty">
 											No users found.
 										</td>
 									</tr>
@@ -115,7 +119,16 @@ const AdminUsers = () => {
 											</td>
 											<td>{user.email}</td>
 											<td>
-												<span className="admin-credits-badge">{user.credit || 0}</span>
+												<span className="admin-credits-badge">🎁 {user.free_credit ?? 0}</span>
+												{' / '}
+												<span className="admin-credits-badge">💎 {user.extra_credit ?? user.credit ?? 0}</span>
+											</td>
+											<td>
+												{user.subscription_plan_name ? (
+													<span className="admin-badge success">{user.subscription_plan_name}</span>
+												) : (
+													<span className="admin-badge muted">Free</span>
+												)}
 											</td>
 											<td>{user.roomCount || 0}</td>
 											<td>
@@ -162,8 +175,19 @@ const AdminUsers = () => {
 									<span>{selectedUser.email}</span>
 								</div>
 								<div className="admin-award-current">
-									Current: <strong>{selectedUser.credit || 0}</strong> credits
+									🎁 Free: <strong>{selectedUser.free_credit ?? 0}</strong> &nbsp;|&nbsp; 💎 Extra: <strong>{selectedUser.extra_credit ?? selectedUser.credit ?? 0}</strong>
 								</div>
+							</div>
+							<div className="admin-form-group">
+								<label>Credit Type</label>
+								<select
+									className="admin-input"
+									value={awardCreditType}
+									onChange={(e) => setAwardCreditType(e.target.value)}
+								>
+									<option value="extra">💎 Extra Credit</option>
+									<option value="free">🎁 Free Credit</option>
+								</select>
 							</div>
 							<div className="admin-form-group">
 								<label>Amount (can be negative to deduct)</label>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchWithAuth } from '../../lib/auth.jsx';
+import { formatIDR } from '../../lib/currency.jsx';
 import AdminLayout from './AdminLayout.jsx';
 
 const API_BASE = (() => {
@@ -74,8 +75,8 @@ const AdminTransactions = () => {
 								<tr>
 									<th>ID</th>
 									<th>User</th>
-									<th>Package</th>
-									<th>Amount (USD)</th>
+									<th>Package / Plan</th>
+									<th>Amount (IDR)</th>
 									<th>Credits</th>
 									<th>Status</th>
 									<th>Date</th>
@@ -99,8 +100,11 @@ const AdminTransactions = () => {
 												<div className="admin-cell-primary">{tx.user?.name}</div>
 												<div className="admin-cell-secondary">{tx.user?.email}</div>
 											</td>
-											<td>{tx.package?.name || '-'}</td>
-											<td>{tx.amount.toLocaleString('id-ID')}</td>
+											<td>
+												<div className="admin-cell-primary">{tx.package?.package_name || tx.plan?.plan_name || '-'}</div>
+												<div className="admin-cell-secondary">{tx.tx_type === 'subscription' ? '📋 Subscription' : '💎 Extra Credit'}</div>
+											</td>
+											<td>{formatIDR(tx.amount)}</td>
 											<td>{tx.credits}</td>
 											<td>
 												<span className={`admin-badge ${statusColors[tx.status]}`}>

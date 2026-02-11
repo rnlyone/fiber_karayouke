@@ -31,15 +31,15 @@ const (
 )
 
 func getIPaymuVA() string {
-	return GetConfigValue(models.ConfigIPaymuVA, "1179001354000500")
+	return GetConfigValue(models.ConfigIPaymuVA, "0000001354000500")
 }
 
 func getIPaymuAPIKey() string {
-	return GetConfigValue(models.ConfigIPaymuAPIKey, "B568C4A4-64F2-47D2-BAC2-2183E462A461")
+	return GetConfigValue(models.ConfigIPaymuAPIKey, "SANDBOXE7008C33-C912-41B7-9F5C-9B79D4DE2D48")
 }
 
 func isIPaymuSandbox() bool {
-	return GetConfigValue(models.ConfigIPaymuSandbox, "false") == "true"
+	return GetConfigValue(models.ConfigIPaymuSandbox, "true") == "true"
 }
 
 func getIPaymuBaseURL() string {

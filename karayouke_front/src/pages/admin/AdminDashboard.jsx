@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchWithAuth } from '../../lib/auth.jsx';
+import { formatIDR } from '../../lib/currency.jsx';
 import AdminLayout from './AdminLayout.jsx';
 
 const API_BASE = (() => {
@@ -14,11 +15,7 @@ const AdminDashboard = () => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 
-	const formatNumber = (value) => (value ?? 0).toLocaleString('en-US');
-	const formatCurrency = (cents) => {
-		const amount = (cents ?? 0) / 100;
-		return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-	};
+	const formatNumber = (value) => (value ?? 0).toLocaleString('id-ID');
 
 	const renderBars = (values = [], colorClass = '') => {
 		const maxValue = Math.max(1, ...values);
@@ -126,7 +123,7 @@ const AdminDashboard = () => {
 							<div className="admin-highlight-grid">
 								<div className="admin-highlight">
 									<span className="admin-highlight-label">Total Revenue</span>
-									<span className="admin-highlight-value">{formatCurrency(stats?.totalRevenue)}</span>
+									<span className="admin-highlight-value">{formatIDR(stats?.totalRevenue ?? 0)}</span>
 								</div>
 								<div className="admin-highlight">
 									<span className="admin-highlight-label">Credits Awarded</span>
@@ -178,7 +175,7 @@ const AdminDashboard = () => {
 										</div>
 										<div className="admin-recap-metric">
 											<span>Revenue</span>
-											<strong>{formatCurrency(stats?.recaps?.[period.key]?.revenue)}</strong>
+											<strong>{formatIDR(stats?.recaps?.[period.key]?.revenue ?? 0)}</strong>
 										</div>
 										<div className="admin-recap-metric">
 											<span>Credits</span>
@@ -228,7 +225,7 @@ const AdminDashboard = () => {
 						</div>
 						<div className="admin-chart">
 							<div className="admin-chart-header">
-								<span>Revenue (USD)</span>
+							<span>Revenue (IDR)</span>
 								<div className="admin-chart-labels">
 									{stats?.series?.labels?.map((label) => (
 										<span key={`rev-label-${label}`}>{label}</span>

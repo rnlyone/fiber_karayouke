@@ -23,6 +23,7 @@ import Credits from './pages/Credits.jsx';
 import {
 	AdminDashboard,
 	AdminSettings,
+	AdminSubscriptionPlans,
 	AdminPackages,
 	AdminUsers,
 	AdminTransactions,
@@ -53,6 +54,7 @@ function App() {
 					{/* Admin routes */}
 					<Route path="/admin" element={<AdminDashboard />} />
 					<Route path="/admin/settings" element={<AdminSettings />} />
+					<Route path="/admin/subscription-plans" element={<AdminSubscriptionPlans />} />
 					<Route path="/admin/packages" element={<AdminPackages />} />
 					<Route path="/admin/users" element={<AdminUsers />} />
 					<Route path="/admin/transactions" element={<AdminTransactions />} />

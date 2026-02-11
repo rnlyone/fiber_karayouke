@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchWithAuth } from '../../lib/auth.jsx';
+import { formatIDR } from '../../lib/currency.jsx';
 import AdminLayout from './AdminLayout.jsx';
 
 const API_BASE = (() => {
@@ -23,22 +24,6 @@ const AdminPackages = () => {
 		visibility: true,
 	});
 	const [submitting, setSubmitting] = useState(false);
-
-	const formatUSD = (cents) => {
-		const amount = Number(cents || 0) / 100;
-		return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-	};
-
-	const centsToInput = (cents) => {
-		const amount = Number(cents || 0) / 100;
-		return amount.toFixed(2);
-	};
-
-	const inputToCents = (value) => {
-		const parsed = Number.parseFloat(value);
-		if (Number.isNaN(parsed) || parsed < 0) return 0;
-		return Math.round(parsed * 100);
-	};
 
 	useEffect(() => {
 		fetchPackages();
@@ -79,7 +64,7 @@ const AdminPackages = () => {
 			package_name: pkg.package_name || '',
 			package_detail: detail,
 			credit_amount: (pkg.credit_amount || 0).toString(),
-			price: centsToInput(pkg.price || 0),
+			price: (pkg.price || 0).toString(),
 			visibility: pkg.visibility !== false,
 		});
 		setShowModal(true);
@@ -93,7 +78,7 @@ const AdminPackages = () => {
 				package_name: formData.package_name,
 				package_detail: formData.package_detail,
 				credit_amount: parseInt(formData.credit_amount, 10),
-				price: inputToCents(formData.price),
+				price: parseInt(formData.price, 10) || 0,
 				visibility: formData.visibility,
 			};
 
@@ -162,7 +147,7 @@ const AdminPackages = () => {
 								<tr>
 									<th>Name</th>
 									<th>Credits</th>
-									<th>Price (USD)</th>
+									<th>Price (IDR)</th>
 									<th>Visible</th>
 									<th>Actions</th>
 								</tr>
@@ -184,7 +169,7 @@ const AdminPackages = () => {
 												)}
 											</td>
 											<td>{pkg.credit_amount}</td>
-											<td>{formatUSD(pkg.price)}</td>
+											<td>{formatIDR(pkg.price)}</td>
 											<td>
 												<span
 													className={`admin-badge ${pkg.visibility ? 'success' : 'muted'}`}
@@ -260,7 +245,7 @@ const AdminPackages = () => {
 									/>
 								</div>
 								<div className="admin-form-group">
-									<label>Price (USD)</label>
+									<label>Price (IDR)</label>
 									<input
 										type="number"
 										className="admin-input"
@@ -268,7 +253,8 @@ const AdminPackages = () => {
 										onChange={(e) => setFormData({ ...formData, price: e.target.value })}
 										required
 										min="0"
-										step="0.01"
+										step="1000"
+										placeholder="e.g., 50000"
 									/>
 								</div>
 							</div>

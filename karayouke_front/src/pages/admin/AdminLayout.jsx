@@ -41,7 +41,8 @@ const AdminLayout = ({ children, title }) => {
 	const navItems = [
 		{ path: '/admin', label: 'Dashboard', icon: '📊' },
 		{ path: '/admin/settings', label: 'Settings', icon: '⚙️' },
-		{ path: '/admin/packages', label: 'Packages', icon: '📦' },
+		{ path: '/admin/subscription-plans', label: 'Subscription Plans', icon: '📋' },
+		{ path: '/admin/packages', label: 'Extra Credits', icon: '📦' },
 		{ path: '/admin/users', label: 'Users', icon: '👥' },
 		{ path: '/admin/transactions', label: 'Transactions', icon: '💳' },
 		{ path: '/admin/rooms', label: 'Rooms', icon: '🎤' },
