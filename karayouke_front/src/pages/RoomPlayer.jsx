@@ -9,6 +9,7 @@ const RoomPlayer = () => {
 	const { state, actions } = useRoom(roomKey);
 	const navigate = useNavigate();
 	const playerRef = useRef(null);
+	const advanceGuardRef = useRef(false);
 	const [isReady, setIsReady] = useState(false);
 	const [roomError, setRoomError] = useState(null);
 	const [roomInfo, setRoomInfo] = useState(null);
@@ -81,6 +82,11 @@ const RoomPlayer = () => {
 
 	const onPlayerStateChange = (event) => {
 		if (event.data === window.YT.PlayerState.ENDED) {
+			// Guard against double-advance: both onStateChange(ENDED) and onEnd can fire.
+			// Only advance once per song ending, using a ref guard with a cooldown.
+			if (advanceGuardRef.current) return;
+			advanceGuardRef.current = true;
+			setTimeout(() => { advanceGuardRef.current = false; }, 2000);
 			actions.advanceSong();
 			return;
 		}
@@ -104,6 +110,10 @@ const RoomPlayer = () => {
 	};
 
 	const onPlayerEnd = () => {
+		// Guard against double-advance (same guard as onStateChange ENDED)
+		if (advanceGuardRef.current) return;
+		advanceGuardRef.current = true;
+		setTimeout(() => { advanceGuardRef.current = false; }, 2000);
 		actions.advanceSong();
 	};
 

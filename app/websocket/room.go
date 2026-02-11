@@ -319,12 +319,19 @@ func (r *Room) HandleMessage(conn *Connection, message []byte) {
 	case "mark-as-played":
 		r.mu.Lock()
 		id, _ := payload["id"].(string)
+		changed := false
 		for i, v := range r.State.Playlist {
 			if v.ID == id && v.PlayedAt == nil {
 				now := time.Now().UTC().Format(time.RFC3339)
 				r.State.Playlist[i].PlayedAt = &now
+				changed = true
 				break
 			}
+		}
+		if !changed {
+			// Song was already played (duplicate request) - skip broadcast
+			r.mu.Unlock()
+			return
 		}
 		// Clean up old played songs to prevent memory accumulation (keep last 10 played)
 		r.cleanupOldPlayedSongs()
