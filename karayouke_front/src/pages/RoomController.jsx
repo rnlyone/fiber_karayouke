@@ -253,14 +253,8 @@ const RoomController = () => {
 		);
 	}
 
-	// This shouldn't render if not authorized (will redirect), but just in case
-	if (!isAuthorized) {
-		return null;
-	}
-
 	return (
-		<div className="controller-shell controller-page">
-			<div className="controller-top-grid">
+		<div className="controller-shell controller-page">			<div className="controller-top-grid">
 				<div className="controller-info-card">
 					<div className="controller-info-header">
 						<Link to={`/room/${roomKey}/master`} onClick={handleExit} className="controller-info-icon" style={{ textDecoration: 'none', cursor: 'pointer' }} aria-label="Exit to room master">
