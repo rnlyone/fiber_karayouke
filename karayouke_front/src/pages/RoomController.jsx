@@ -18,11 +18,10 @@ const RoomController = () => {
 	const [filterByViews, setFilterByViews] = useState(false);
 	const [dragIndex, setDragIndex] = useState(null);
 	const [dragTarget, setDragTarget] = useState(null);
-	const [isAuthorized, setIsAuthorized] = useState(false);
-	const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 	const [userName, setUserName] = useState('Guest');
 	const [roomError, setRoomError] = useState(null);
 	const [roomInfo, setRoomInfo] = useState(null);
+	const [isVerifying, setIsVerifying] = useState(true);
 	const [isExpired, setIsExpired] = useState(false);
 	const dragSongIdRef = useRef(null);
 	const dragTargetRef = useRef(null);
@@ -38,36 +37,35 @@ const RoomController = () => {
 			setIsExpired(true);
 			// Redirect to dashboard (authenticated) or homepage after showing message
 			setTimeout(() => {
-				navigate(isAuthenticated ? '/' : '/', { replace: true });
+				navigate('/', { replace: true });
 			}, 3000);
 		});
 		return unsubscribe;
-	}, [roomKey, navigate, isAuthenticated]);
+	}, [roomKey, navigate]);
 
-	// Check room exists and authorization
+	// Check room exists and authorization (unified for both authenticated and guest users)
 	useEffect(() => {
 		const checkAuthorization = async () => {
-			setIsCheckingAuth(true);
+			setIsVerifying(true);
 
 			// First verify room exists
 			const roomResult = await checkRoomExists(roomKey);
 			if (!roomResult.exists) {
 				setRoomError('Room not found');
-				setIsCheckingAuth(false);
+				setIsVerifying(false);
 				return;
 			}
 			if (roomResult.isExpired) {
 				setIsExpired(true);
-				setIsCheckingAuth(false);
+				setIsVerifying(false);
 				return;
 			}
 			setRoomInfo(roomResult);
 			
-			// Check if user is authenticated
+			// Check if user is authenticated (room owner or authenticated user)
 			if (isAuthenticated && user) {
 				setUserName(user.name);
-				setIsAuthorized(true);
-				setIsCheckingAuth(false);
+				setIsVerifying(false);
 				return;
 			}
 			
@@ -75,8 +73,7 @@ const RoomController = () => {
 			const guestProfile = await getGuestProfile(roomKey);
 			if (guestProfile?.name) {
 				setUserName(guestProfile.name);
-				setIsAuthorized(true);
-				setIsCheckingAuth(false);
+				setIsVerifying(false);
 				return;
 			}
 			
@@ -247,8 +244,8 @@ const RoomController = () => {
 		actions.moveSong(songId, targetQueueIndex);
 	};
 
-	// Show loading while checking authorization
-	if (isCheckingAuth) {
+	// Show loading while verifying
+	if (isVerifying) {
 		return (
 			<div className="controller-loading">
 				<div className="auth-spinner" />
