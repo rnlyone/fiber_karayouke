@@ -343,6 +343,15 @@ func (r *Room) HandleMessage(conn *Connection, message []byte) {
 		r.Broadcast(data)
 		return
 
+	case "emoji":
+		emoji, _ := payload["emoji"].(string)
+		if emoji != "" {
+			msg := map[string]interface{}{"type": "emoji", "emoji": emoji}
+			data, _ := json.Marshal(msg)
+			r.Broadcast(data)
+		}
+		return
+
 	default:
 		return
 	}

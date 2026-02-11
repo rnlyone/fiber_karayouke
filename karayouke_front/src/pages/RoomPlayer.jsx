@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import YouTube from 'react-youtube';
-import { useRoom, checkRoomExists, subscribeToRoomExpiration } from '../lib/roomStore.js';
+import JSConfetti from 'js-confetti';
+import { useRoom, checkRoomExists, subscribeToRoomExpiration, subscribeToEmoji } from '../lib/roomStore.js';
 
 const RoomPlayer = () => {
 	const { roomKey } = useParams();
@@ -15,6 +16,29 @@ const RoomPlayer = () => {
 	const [roomInfo, setRoomInfo] = useState(null);
 	const [isVerifying, setIsVerifying] = useState(true);
 	const [isExpired, setIsExpired] = useState(false);
+	const jsConfettiRef = useRef(null);
+
+	// Initialize JSConfetti once
+	useEffect(() => {
+		jsConfettiRef.current = new JSConfetti();
+		return () => {
+			jsConfettiRef.current = null;
+		};
+	}, []);
+
+	// Listen for emoji events and trigger confetti
+	useEffect(() => {
+		const unsubscribe = subscribeToEmoji(roomKey, (emoji) => {
+			if (jsConfettiRef.current) {
+				jsConfettiRef.current.addConfetti({
+					emojis: [emoji],
+					emojiSize: 80,
+					confettiNumber: 40,
+				});
+			}
+		});
+		return unsubscribe;
+	}, [roomKey]);
 
 	const nowPlaying = state.nowPlaying || state.queue[0];
 	const roomTitle = useMemo(() => roomInfo?.name || state.meta?.name || 'Player', [roomInfo?.name, state.meta?.name]);
