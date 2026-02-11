@@ -14,8 +14,15 @@ const RoomController = () => {
 	const [results, setResults] = useState([]);
 	const [isSearching, setIsSearching] = useState(false);
 	const [showFilters, setShowFilters] = useState(false);
-	const [filterKaraokeOnly, setFilterKaraokeOnly] = useState(true);
-	const [filterByViews, setFilterByViews] = useState(false);
+	// Load filter settings from localStorage or use defaults
+	const [filterKaraokeOnly, setFilterKaraokeOnly] = useState(() => {
+		const saved = localStorage.getItem('karayouke:filter:karaokeOnly');
+		return saved !== null ? JSON.parse(saved) : true;
+	});
+	const [filterByViews, setFilterByViews] = useState(() => {
+		const saved = localStorage.getItem('karayouke:filter:byViews');
+		return saved !== null ? JSON.parse(saved) : false;
+	});
 	const [dragIndex, setDragIndex] = useState(null);
 	const [dragTarget, setDragTarget] = useState(null);
 	const [userName, setUserName] = useState('Guest');
@@ -83,6 +90,15 @@ const RoomController = () => {
 		
 		checkAuthorization();
 	}, [roomKey, isAuthenticated, user, navigate]);
+
+	// Save filter settings to localStorage when they change
+	useEffect(() => {
+		localStorage.setItem('karayouke:filter:karaokeOnly', JSON.stringify(filterKaraokeOnly));
+	}, [filterKaraokeOnly]);
+
+	useEffect(() => {
+		localStorage.setItem('karayouke:filter:byViews', JSON.stringify(filterByViews));
+	}, [filterByViews]);
 
 	if (isExpired) {
 		return (
