@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -57,16 +58,16 @@ func getFlipAuthHeader() string {
 // Flip API Call Helper
 // ========================================
 
-func callFlipAPI(endpoint string, body []byte) (map[string]interface{}, error) {
+func callFlipAPI(endpoint string, body string, contentType string) (map[string]interface{}, error) {
 	baseURL := getFlipBaseURL()
 	url := baseURL + endpoint
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	req, err := http.NewRequest("POST", url, strings.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", getFlipAuthHeader())
 
@@ -185,8 +186,11 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 	}
 	redirectURL := baseURL + "/payment/status/" + txID
 
-	// Build Flip Create Bill request (checkout_seamless step for PopUp)
-	billBody, _ := json.Marshal(map[string]interface{}{
+	// Build Flip Create Bill request
+	var result map[string]interface{}
+	var flipErr error
+
+	billData := map[string]interface{}{
 		"title":        productName,
 		"type":         "SINGLE",
 		"amount":       price,
@@ -195,25 +199,46 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 		"reference_id": txID,
 		"sender_name":  user.Name,
 		"sender_email": user.Email,
-	})
-
-	result, err := callFlipAPI("/v3/pwf/bill", billBody)
-	if err != nil {
-		// Rollback transaction
-		initializers.Db.Delete(&transaction)
-		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create bill: " + err.Error()})
 	}
 
-	// Extract company_code, product_code, and link_id from response
+	if getFlipEnvironment() == "production" {
+		// V3: JSON body (supports popup with company_code/product_code)
+		billBody, _ := json.Marshal(billData)
+		result, flipErr = callFlipAPI("/v3/pwf/bill", string(billBody), "application/json")
+	} else {
+		// V2: form-urlencoded body (sandbox compatible)
+		formData := url.Values{}
+		formData.Set("title", productName)
+		formData.Set("type", "SINGLE")
+		formData.Set("amount", fmt.Sprintf("%d", price))
+		formData.Set("step", "checkout_seamless")
+		formData.Set("redirect_url", redirectURL)
+		formData.Set("reference_id", txID)
+		formData.Set("sender_name", user.Name)
+		formData.Set("sender_email", user.Email)
+		result, flipErr = callFlipAPI("/v2/pwf/bill", formData.Encode(), "application/x-www-form-urlencoded")
+	}
+
+	if flipErr != nil {
+		// Rollback transaction
+		initializers.Db.Delete(&transaction)
+		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create bill: " + flipErr.Error()})
+	}
+
+	// Extract company_code, product_code, link_id, and link_url from response
 	companyCode := ""
 	productCode := ""
 	linkID := ""
+	linkURL := ""
 
 	if cc, ok := result["company_code"].(string); ok {
 		companyCode = cc
 	}
 	if pc, ok := result["product_code"].(string); ok {
 		productCode = pc
+	}
+	if lu, ok := result["link_url"].(string); ok {
+		linkURL = lu
 	}
 
 	// link_id can be float64 or string depending on API version
@@ -234,6 +259,7 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 		"transaction_id": txID,
 		"company_code":   companyCode,
 		"product_code":   productCode,
+		"link_url":       linkURL,
 		"amount":         price,
 		"product":        productName,
 	})

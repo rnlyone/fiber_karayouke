@@ -77,7 +77,7 @@ const Packages = () => {
 				return;
 			}
 
-			// Flip PopUp checkout flow
+			// Flip PopUp checkout flow (V3 production)
 			if (data.company_code && data.product_code && window.FlipCheckout) {
 				window.FlipCheckout.pay(data.company_code, data.product_code, {
 					onSuccess: () => {
@@ -92,6 +92,9 @@ const Packages = () => {
 						navigate(`/payment/status/${data.transaction_id}`);
 					},
 				});
+			} else if (data.link_url) {
+				// V2 fallback: redirect to Flip payment page
+				window.location.href = data.link_url;
 			} else {
 				throw new Error('Payment gateway is unavailable. Please try again later.');
 			}
