@@ -52,7 +52,7 @@ const Credits = () => {
 						</div>
 						<div className="credits-tech">
 							<span className="credits-tech-icon">💳</span>
-							<span>Stripe</span>
+							<span>Flip</span>
 						</div>
 						<div className="credits-tech">
 							<span className="credits-tech-icon">🐘</span>

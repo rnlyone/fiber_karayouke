@@ -15,7 +15,7 @@ const faqs = [
 	},
 	{
 		question: 'What are credits and how do I get them?',
-		answer: 'Credits are used to create karaoke rooms. Each room creation costs credits. You can purchase credit packages from the Packages page using a credit or debit card via our secure Stripe payment gateway.',
+		answer: 'Credits are used to create karaoke rooms. Each room creation costs credits. You can purchase credit packages from the Packages page using bank transfer, virtual account, QRIS, e-wallet, and other Indonesian payment methods via Flip.',
 	},
 	{
 		question: 'How long does a room last?',
@@ -39,7 +39,7 @@ const faqs = [
 	},
 	{
 		question: 'Is my payment information secure?',
-		answer: 'Yes. All payments are processed through Stripe, a PCI-compliant payment processor. We never store your card details on our servers.',
+		answer: 'Yes. All payments are processed through Flip, a trusted Indonesian payment gateway. We never store your payment details on our servers.',
 	},
 	{
 		question: 'How do I contact support?',
