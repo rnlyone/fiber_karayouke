@@ -262,6 +262,7 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 		"link_url":       linkURL,
 		"amount":         price,
 		"product":        productName,
+		"_debug_flip":    result,
 	})
 }
 

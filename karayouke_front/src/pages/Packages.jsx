@@ -96,7 +96,8 @@ const Packages = () => {
 				// V2 fallback: redirect to Flip payment page
 				window.location.href = data.link_url;
 			} else {
-				throw new Error('Payment gateway is unavailable. Please try again later.');
+				console.error('Flip response debug:', JSON.stringify(data));
+				throw new Error('Payment gateway is unavailable. Response: ' + JSON.stringify(data._debug_flip || data));
 			}
 		} catch (err) {
 			setError(err.message);
