@@ -68,7 +68,6 @@ func seedDefaults() {
 		{ID: uuid.New().String(), Key: models.ConfigRoomCreationCost, Value: "1"},  // 1 credit to create room
 		{ID: uuid.New().String(), Key: models.ConfigDefaultCredits, Value: "5"},    // 5 credits for new users
 		{ID: uuid.New().String(), Key: models.ConfigDailyFreeCredits, Value: "5"},  // 5 daily free credits
-		{ID: uuid.New().String(), Key: models.ConfigFreeRoomDuration, Value: "40"}, // 40 min room for free plan
 	}
 
 	for _, config := range defaultConfigs {

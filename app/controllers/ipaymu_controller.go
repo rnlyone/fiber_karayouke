@@ -545,16 +545,6 @@ func GetDefaultFreeCredits() int {
 	return credits
 }
 
-// GetFreeRoomDuration returns the room duration in minutes for free plan users
-func GetFreeRoomDuration() int {
-	value := GetConfigValue(models.ConfigFreeRoomDuration, "40")
-	duration, err := strconv.Atoi(value)
-	if err != nil {
-		return 40
-	}
-	return duration
-}
-
 // GetUserRoomDuration returns the room duration in minutes for a given user
 func GetUserRoomDuration(user *models.User) int {
 	if user.HasActiveSubscription() {
@@ -563,5 +553,5 @@ func GetUserRoomDuration(user *models.User) int {
 			return plan.RoomDurationMinutes
 		}
 	}
-	return GetFreeRoomDuration()
+	return GetRoomMaxDuration()
 }

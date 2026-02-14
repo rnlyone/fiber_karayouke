@@ -17,15 +17,17 @@ const Packages = () => {
 	
 	const [plans, setPlans] = useState([]);
 	const [packages, setPackages] = useState([]);
+	const [freePlan, setFreePlan] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [purchasing, setPurchasing] = useState(null); // id of item being purchased
 
 	const fetchData = useCallback(async () => {
 		try {
-			const [plansRes, packagesRes] = await Promise.all([
+			const [plansRes, packagesRes, freeRes] = await Promise.all([
 				fetch(`${API_BASE}/api/subscription-plans`),
 				fetch(`${API_BASE}/api/packages`),
+				fetch(`${API_BASE}/api/free-plan-info`),
 			]);
 			if (!plansRes.ok) throw new Error('Failed to fetch subscription plans');
 			if (!packagesRes.ok) throw new Error('Failed to fetch packages');
@@ -33,6 +35,10 @@ const Packages = () => {
 			const packagesData = await packagesRes.json();
 			setPlans(plansData || []);
 			setPackages(packagesData || []);
+			if (freeRes.ok) {
+				const freeData = await freeRes.json();
+				setFreePlan(freeData);
+			}
 		} catch (err) {
 			setError(err.message);
 		} finally {
@@ -111,7 +117,7 @@ const Packages = () => {
 				{/* Free Plan Info */}
 				<section className="packages-hero">
 					<h1>Plans &amp; Pricing</h1>
-					<p>Every user gets <strong>5 free credits daily</strong> and <strong>40-minute rooms</strong> on the free plan. Upgrade for more!</p>
+					<p>Start with a generous free plan. Upgrade for more daily credits and longer room sessions!</p>
 				</section>
 
 				{loading ? (
@@ -124,12 +130,52 @@ const Packages = () => {
 				) : (
 					<>
 						{/* Subscription Plans */}
-						{plans.length > 0 && (
-							<section className="packages-section">
-								<h2>Subscription Plans</h2>
-								<p className="packages-section-desc">Get more daily free credits and longer room duration.</p>
-								<div className="packages-grid">
-									{plans.map((plan, idx) => {
+						<section className="packages-section">
+							<h2>Subscription Plans</h2>
+							<p className="packages-section-desc">Get more daily free credits and longer room duration.</p>
+							<div className="packages-grid">
+								{/* Free Plan Card */}
+								{freePlan && (
+									<div className="package-card free-plan">
+										<div className="package-badge free">Free</div>
+										<div className="package-header">
+											<h3>Free Plan</h3>
+											<div className="package-credits">
+												<span className="credits-amount">{freePlan.daily_free_credits}</span>
+												<span className="credits-label">daily credits</span>
+											</div>
+										</div>
+										<div className="package-price">
+											<span className="price-main">{format(0)}</span>
+											<span className="price-period">forever</span>
+										</div>
+										<ul className="package-features">
+											<li><span className="feature-check">✓</span>{freePlan.daily_free_credits} free credits per day</li>
+											<li><span className="feature-check">✓</span>{freePlan.room_duration_minutes}-minute room sessions</li>
+											<li><span className="feature-check">✓</span>{freePlan.room_creation_cost} credit per room</li>
+											<li><span className="feature-check">✓</span>No credit card required</li>
+										</ul>
+										{!isAuthenticated ? (
+											<button
+												className="package-buy-btn"
+												onClick={() => navigate('/register')}
+											>
+												Get Started Free
+											</button>
+										) : (
+											<button
+												className="package-buy-btn"
+												style={{ opacity: 0.6, cursor: 'default' }}
+												disabled
+											>
+												Current Plan
+											</button>
+										)}
+									</div>
+								)}
+
+								{/* Paid Subscription Plans */}
+								{plans.map((plan, idx) => {
 										const details = parseDetail(plan.plan_detail);
 										const isPopular = idx === Math.floor(plans.length / 2);
 										return (
@@ -165,7 +211,6 @@ const Packages = () => {
 									})}
 								</div>
 							</section>
-						)}
 
 						{/* Extra Credit Packages */}
 						{packages.length > 0 && (

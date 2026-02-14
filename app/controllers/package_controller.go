@@ -51,6 +51,23 @@ func (c *PackageController) ListSubscriptionPlans(ctx *fiber.Ctx) error {
 }
 
 // ========================================
+// Public: Free Plan Info
+// ========================================
+
+// GetFreePlanInfo returns the free plan configuration for display on the packages page
+func (c *PackageController) GetFreePlanInfo(ctx *fiber.Ctx) error {
+	dailyCredits := GetDefaultFreeCredits()
+	roomDuration := GetRoomMaxDuration()
+	roomCost := GetRoomCreationCost()
+
+	return ctx.JSON(fiber.Map{
+		"daily_free_credits":    dailyCredits,
+		"room_duration_minutes": roomDuration,
+		"room_creation_cost":    roomCost,
+	})
+}
+
+// ========================================
 // Public: List Extra Credit Packages
 // ========================================
 
@@ -225,10 +242,10 @@ func (c *PackageController) GetMyCredits(ctx *fiber.Ctx) error {
 		var plan models.SubscriptionPlan
 		if err := initializers.Db.Where("id = ?", *user.SubscriptionPlanID).First(&plan).Error; err == nil {
 			subscriptionInfo = fiber.Map{
-				"plan_name":            plan.PlanName,
-				"daily_free_credits":   plan.DailyFreeCredits,
+				"plan_name":             plan.PlanName,
+				"daily_free_credits":    plan.DailyFreeCredits,
 				"room_duration_minutes": plan.RoomDurationMinutes,
-				"expires_at":           user.SubscriptionExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
+				"expires_at":            user.SubscriptionExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
 			}
 		}
 	}
@@ -237,12 +254,12 @@ func (c *PackageController) GetMyCredits(ctx *fiber.Ctx) error {
 	initializers.Db.Where("user_id = ?", user.ID).Order("created_at DESC").Limit(50).Find(&creditLogs)
 
 	return ctx.JSON(fiber.Map{
-		"extra_credit":    user.Credit,
-		"free_credit":     user.FreeCredit,
-		"total_credit":    user.TotalCredits(),
-		"subscription":    subscriptionInfo,
-		"room_duration":   GetUserRoomDuration(user),
-		"history":         creditLogs,
+		"extra_credit":  user.Credit,
+		"free_credit":   user.FreeCredit,
+		"total_credit":  user.TotalCredits(),
+		"subscription":  subscriptionInfo,
+		"room_duration": GetUserRoomDuration(user),
+		"history":       creditLogs,
 	})
 }
 

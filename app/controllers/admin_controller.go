@@ -64,7 +64,6 @@ func (c *AdminController) GetConfigs(ctx *fiber.Ctx) error {
 		models.ConfigRoomCreationCost: "1",   // 1 credit default
 		models.ConfigDefaultCredits:   "0",   // 0 credits for new users
 		models.ConfigDailyFreeCredits: "5",   // 5 daily free credits for free plan
-		models.ConfigFreeRoomDuration: "40",  // 40 min room for free plan
 		models.ConfigIPaymuSandbox:    "true",
 	}
 	for key, defaultValue := range defaults {
@@ -147,7 +146,6 @@ func (c *AdminController) DeleteConfig(ctx *fiber.Ctx) error {
 		models.ConfigRoomCreationCost,
 		models.ConfigDefaultCredits,
 		models.ConfigDailyFreeCredits,
-		models.ConfigFreeRoomDuration,
 		models.ConfigIPaymuVA,
 		models.ConfigIPaymuAPIKey,
 		models.ConfigIPaymuSandbox,
@@ -742,21 +740,46 @@ func (c *AdminController) ListRooms(ctx *fiber.Ctx) error {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch rooms"})
 	}
 
-	// Filter by status if requested (in memory since expiration is calculated)
-	var filteredRooms []models.Room
-	if status == "active" || status == "expired" {
-		for _, room := range rooms {
-			isExpired := room.IsExpired(maxDuration)
-			if (status == "active" && !isExpired) || (status == "expired" && isExpired) {
-				filteredRooms = append(filteredRooms, room)
-			}
+	// Build response with computed fields
+	type RoomAdminResponse struct {
+		ID          string       `json:"id"`
+		RoomKey     string       `json:"room_key"`
+		RoomCreator string       `json:"room_creator"`
+		RoomName    string       `json:"room_name"`
+		CreatedAt   time.Time    `json:"created_at"`
+		RoomMaster  string       `json:"room_master"`
+		Creator     *models.User `json:"creator,omitempty"`
+		ExpiredAt   time.Time    `json:"expired_at"`
+		IsExpired   bool         `json:"is_expired"`
+	}
+
+	var result []RoomAdminResponse
+	for _, room := range rooms {
+		expiredAt := room.GetExpiredAt(maxDuration)
+		isExpired := time.Now().After(expiredAt)
+
+		if status == "active" && isExpired {
+			continue
 		}
-	} else {
-		filteredRooms = rooms
+		if status == "expired" && !isExpired {
+			continue
+		}
+
+		result = append(result, RoomAdminResponse{
+			ID:          room.ID,
+			RoomKey:     room.RoomKey,
+			RoomCreator: room.RoomCreator,
+			RoomName:    room.RoomName,
+			CreatedAt:   room.CreatedAt,
+			RoomMaster:  room.RoomMaster,
+			Creator:     &room.Creator,
+			ExpiredAt:   expiredAt,
+			IsExpired:   isExpired,
+		})
 	}
 
 	return ctx.JSON(fiber.Map{
-		"rooms": filteredRooms,
+		"rooms": result,
 		"total": total,
 		"page":  page,
 		"limit": limit,

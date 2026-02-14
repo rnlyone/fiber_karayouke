@@ -68,6 +68,7 @@ func RegisterWebRoutes(app *fiber.App) {
 	// Public package/plan routes
 	app.Get("/api/packages", packageController.ListPublic)
 	app.Get("/api/subscription-plans", packageController.ListSubscriptionPlans)
+	app.Get("/api/free-plan-info", packageController.GetFreePlanInfo)
 	app.Get("/api/transactions", packageController.MyTransactions)
 	app.Get("/api/transactions/:id", packageController.GetTransaction)
 	app.Get("/api/credits", packageController.GetMyCredits)

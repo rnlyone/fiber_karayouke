@@ -200,7 +200,6 @@ const (
 	ConfigRoomCreationCost = "room_creation_cost" // credits required
 	ConfigDefaultCredits   = "default_credits"    // extra credits for new users
 	ConfigDailyFreeCredits = "daily_free_credits" // daily free credits for free plan (default: 5)
-	ConfigFreeRoomDuration = "free_room_duration" // room duration in minutes for free plan (default: 40)
 	ConfigIPaymuVA         = "ipaymu_va"          // iPaymu Virtual Account
 	ConfigIPaymuAPIKey     = "ipaymu_api_key"     // iPaymu API Key
 	ConfigIPaymuSandbox    = "ipaymu_sandbox"     // "true" or "false"
