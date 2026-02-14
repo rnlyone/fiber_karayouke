@@ -164,21 +164,24 @@ func (SystemConfig) TableName() string {
 
 // Transaction represents a payment transaction
 type Transaction struct {
-	ID            string            `gorm:"column:id;primaryKey" json:"id"`
-	UserID        string            `gorm:"column:user_id" json:"user_id"`
-	PackageID     *string           `gorm:"column:package_id" json:"package_id"`         // For extra credit purchases
-	PlanID        *string           `gorm:"column:plan_id" json:"plan_id"`               // For subscription purchases
-	Amount        int64             `gorm:"column:amount" json:"amount"`                 // Amount in IDR
-	Status        string            `gorm:"column:status" json:"status"`                 // pending, settlement, failed, expired, refunded
-	PaymentMethod string            `gorm:"column:payment_method" json:"payment_method"` // flip, free
-	TxType        string            `gorm:"column:tx_type" json:"tx_type"`               // extra_credit, subscription
-	ExternalID    string            `gorm:"column:external_id" json:"external_id"`       // Flip bill_link_id
-	CreatedAt     time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time         `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	PaidAt        *time.Time        `gorm:"column:paid_at" json:"paid_at"`
-	User          User              `gorm:"foreignKey:UserID;references:ID" json:"user"`
-	Package       *Package          `gorm:"foreignKey:PackageID;references:ID" json:"package"`
-	Plan          *SubscriptionPlan `gorm:"foreignKey:PlanID;references:ID" json:"plan"`
+	ID              string            `gorm:"column:id;primaryKey" json:"id"`
+	UserID          string            `gorm:"column:user_id" json:"user_id"`
+	PackageID       *string           `gorm:"column:package_id" json:"package_id"`             // For extra credit purchases
+	PlanID          *string           `gorm:"column:plan_id" json:"plan_id"`                   // For subscription purchases
+	Amount          int64             `gorm:"column:amount" json:"amount"`                     // Amount in IDR
+	Status          string            `gorm:"column:status" json:"status"`                     // pending, settlement, failed, expired, refunded
+	PaymentMethod   string            `gorm:"column:payment_method" json:"payment_method"`     // flip, free
+	TxType          string            `gorm:"column:tx_type" json:"tx_type"`                   // extra_credit, subscription
+	ExternalID      string            `gorm:"column:external_id" json:"external_id"`           // Flip bill_link_id
+	FlipURL         string            `gorm:"column:flip_url" json:"flip_url"`                 // Flip payment link URL
+	FlipCompanyCode string            `gorm:"column:flip_company_code" json:"flip_company_code"` // Flip company code (V3)
+	FlipProductCode string            `gorm:"column:flip_product_code" json:"flip_product_code"` // Flip product code (V3)
+	CreatedAt       time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt       time.Time         `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	PaidAt          *time.Time        `gorm:"column:paid_at" json:"paid_at"`
+	User            User              `gorm:"foreignKey:UserID;references:ID" json:"user"`
+	Package         *Package          `gorm:"foreignKey:PackageID;references:ID" json:"package"`
+	Plan            *SubscriptionPlan `gorm:"foreignKey:PlanID;references:ID" json:"plan"`
 }
 
 func (Transaction) TableName() string {

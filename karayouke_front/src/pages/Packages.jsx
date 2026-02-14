@@ -77,28 +77,15 @@ const Packages = () => {
 				return;
 			}
 
-			// Flip PopUp checkout flow (V3 production)
-			if (data.company_code && data.product_code && window.FlipCheckout) {
-				window.FlipCheckout.pay(data.company_code, data.product_code, {
-					onSuccess: () => {
-						navigate(`/payment/status/${data.transaction_id}`);
-					},
-					onPending: () => {
-						navigate(`/payment/status/${data.transaction_id}`);
-					},
-					onClose: () => {
-						setPurchasing(null);
-						// User closed popup without completing - navigate to status to check
-						navigate(`/payment/status/${data.transaction_id}`);
-					},
-				});
-			} else if (data.link_url) {
-				// V2 fallback: redirect to Flip payment page
-				window.location.href = data.link_url;
-			} else {
-				console.error('Flip response debug:', JSON.stringify(data));
-				throw new Error('Payment gateway is unavailable. Response: ' + JSON.stringify(data._debug_flip || data));
-			}
+			// Navigate to payment status page — popup will open there
+			navigate(`/payment/status/${data.transaction_id}`, {
+				state: {
+					autoOpen: true,
+					companyCode: data.company_code,
+					productCode: data.product_code,
+					linkUrl: data.link_url,
+				},
+			});
 		} catch (err) {
 			setError(err.message);
 			setPurchasing(null);

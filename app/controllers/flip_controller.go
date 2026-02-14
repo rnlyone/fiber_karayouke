@@ -253,16 +253,18 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 	if linkID != "" {
 		transaction.ExternalID = linkID
 	}
+	transaction.FlipURL = linkURL
+	transaction.FlipCompanyCode = companyCode
+	transaction.FlipProductCode = productCode
 	initializers.Db.Save(&transaction)
 
 	return ctx.JSON(fiber.Map{
-		"transaction_id": txID,
-		"company_code":   companyCode,
-		"product_code":   productCode,
-		"link_url":       linkURL,
-		"amount":         price,
-		"product":        productName,
-		"_debug_flip":    result,
+		"transaction_id":    txID,
+		"company_code":      companyCode,
+		"product_code":      productCode,
+		"link_url":          linkURL,
+		"amount":            price,
+		"product":           productName,
 	})
 }
 

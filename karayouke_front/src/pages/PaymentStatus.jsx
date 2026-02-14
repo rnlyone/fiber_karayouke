@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, fetchWithAuth, getAuthToken } from '../lib/auth.jsx';
 import { useCurrency } from '../lib/currency.jsx';
@@ -21,9 +21,11 @@ const PaymentStatus = () => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [pollCount, setPollCount] = useState(0);
+	const [popupOpen, setPopupOpen] = useState(false);
+	const popupTriggered = useRef(false);
 
-	// Get initial state from navigation
-	const initialState = location.state || {};
+	// Get initial state from navigation (from Packages page)
+	const navState = location.state || {};
 
 	const fetchTransaction = useCallback(async () => {
 		try {
@@ -37,12 +39,28 @@ const PaymentStatus = () => {
 			}
 			const data = await response.json();
 			setTransaction(data);
+			return data;
 		} catch (err) {
 			setError(err.message);
+			return null;
 		} finally {
 			setLoading(false);
 		}
 	}, [transactionId]);
+
+	// Open the Flip payment popup or redirect to link
+	const openFlipPayment = useCallback((companyCode, productCode, linkUrl) => {
+		if (companyCode && productCode && window.FlipCheckout) {
+			setPopupOpen(true);
+			window.FlipCheckout.pay(companyCode, productCode, {
+				onSuccess: () => { setPopupOpen(false); fetchTransaction(); },
+				onPending: () => { setPopupOpen(false); fetchTransaction(); },
+				onClose: () => { setPopupOpen(false); },
+			});
+		} else if (linkUrl) {
+			window.open(linkUrl, '_blank');
+		}
+	}, [fetchTransaction]);
 
 	useEffect(() => {
 		const hasToken = !!getAuthToken();
@@ -51,20 +69,41 @@ const PaymentStatus = () => {
 			return;
 		}
 		if (isAuthenticated || hasToken) {
-			fetchTransaction();
+			fetchTransaction().then((tx) => {
+				// Auto-open popup if navigated from Packages page with autoOpen flag
+				if (navState.autoOpen && !popupTriggered.current && tx && tx.status === 'pending') {
+					popupTriggered.current = true;
+					const cc = navState.companyCode || tx.flip_company_code;
+					const pc = navState.productCode || tx.flip_product_code;
+					const url = navState.linkUrl || tx.flip_url;
+					if (cc || url) {
+						setTimeout(() => openFlipPayment(cc, pc, url), 500);
+					}
+				}
+			});
 		}
-	}, [transactionId, isAuthenticated, authLoading, navigate, fetchTransaction, location]);
+	}, [transactionId, isAuthenticated, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-	// Poll for status updates if payment is pending
+	// Poll for status updates if payment is pending (pause while popup is open)
 	useEffect(() => {
-		if (transaction && transaction.status === 'pending' && pollCount < 60) {
+		if (transaction && transaction.status === 'pending' && pollCount < 60 && !popupOpen) {
 			const timer = setTimeout(() => {
 				fetchTransaction();
 				setPollCount((c) => c + 1);
 			}, 5000);
 			return () => clearTimeout(timer);
 		}
-	}, [transaction, pollCount, fetchTransaction]);
+	}, [transaction, pollCount, fetchTransaction, popupOpen]);
+
+	// Handle "Continue Payment" button click
+	const handleContinuePayment = () => {
+		if (!transaction) return;
+		openFlipPayment(
+			transaction.flip_company_code,
+			transaction.flip_product_code,
+			transaction.flip_url,
+		);
+	};
 
 	const getStatusIcon = (status) => {
 		switch (status) {
@@ -96,7 +135,7 @@ const PaymentStatus = () => {
 					? 'Your subscription has been activated! Enjoy your upgraded plan.'
 					: 'Your credits have been added to your account.';
 			case 'pending':
-				return 'Please complete your payment through the payment page. The status will update automatically.';
+				return 'Please complete your payment. Click the button below to open the payment page.';
 			case 'failed':
 				return 'Your payment could not be processed. Please try again.';
 			case 'expired':
@@ -148,9 +187,10 @@ const PaymentStatus = () => {
 
 	const status = transaction?.status || 'pending';
 	const txType = transaction?.tx_type || 'extra_credit';
-	const packageName = transaction?.package_name || transaction?.plan_name || initialState.packageName;
+	const packageName = transaction?.item_name || navState.packageName;
 	const credits = transaction?.credit_amount;
 	const amount = transaction?.amount || 0;
+	const hasPaymentLink = !!(transaction?.flip_company_code || transaction?.flip_url);
 
 	return (
 		<div className="payment-status-page">
@@ -212,7 +252,23 @@ const PaymentStatus = () => {
 					</div>
 				)}
 
-				{status === 'pending' && (
+				{status === 'pending' && hasPaymentLink && (
+					<div className="payment-status-pending-info">
+						<button className="btn-primary btn-pay" onClick={handleContinuePayment} disabled={popupOpen}>
+							{popupOpen ? (
+								<><span className="auth-spinner" style={{ marginRight: '10px' }} /> Payment in progress...</>
+							) : (
+								'💳 Continue Payment'
+							)}
+						</button>
+						<p style={{ marginTop: '16px', opacity: 0.7 }}>
+							<span className="auth-spinner" style={{ marginRight: '8px' }} />
+							Waiting for payment confirmation... ({pollCount})
+						</p>
+					</div>
+				)}
+
+				{status === 'pending' && !hasPaymentLink && (
 					<div className="payment-status-pending-info">
 						<p>
 							<span className="auth-spinner" style={{ marginRight: '10px' }} />
@@ -241,7 +297,7 @@ const PaymentStatus = () => {
 						</>
 					)}
 					{status === 'pending' && (
-						<Link to="/" className="btn-secondary">Go to Dashboard</Link>
+						<Link to="/packages" className="btn-secondary">← Back to Packages</Link>
 					)}
 					{(status === 'failed' || status === 'expired') && (
 						<>
