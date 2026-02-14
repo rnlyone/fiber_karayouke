@@ -64,10 +64,13 @@ func runMigrate(args []string) error {
 func seedDefaults() {
 	// Seed default system configs
 	defaultConfigs := []models.SystemConfig{
-		{ID: uuid.New().String(), Key: models.ConfigRoomMaxDuration, Value: "120"}, // 2 hours default
-		{ID: uuid.New().String(), Key: models.ConfigRoomCreationCost, Value: "1"},  // 1 credit to create room
-		{ID: uuid.New().String(), Key: models.ConfigDefaultCredits, Value: "5"},    // 5 credits for new users
-		{ID: uuid.New().String(), Key: models.ConfigDailyFreeCredits, Value: "5"},  // 5 daily free credits
+		{ID: uuid.New().String(), Key: models.ConfigRoomMaxDuration, Value: "120"},     // 2 hours default
+		{ID: uuid.New().String(), Key: models.ConfigRoomCreationCost, Value: "1"},      // 1 credit to create room
+		{ID: uuid.New().String(), Key: models.ConfigDefaultCredits, Value: "5"},        // 5 credits for new users
+		{ID: uuid.New().String(), Key: models.ConfigDailyFreeCredits, Value: "5"},      // 5 daily free credits
+		{ID: uuid.New().String(), Key: models.ConfigFlipSecretKey, Value: ""},          // Flip API Secret Key
+		{ID: uuid.New().String(), Key: models.ConfigFlipValidationToken, Value: ""},    // Flip Validation Token
+		{ID: uuid.New().String(), Key: models.ConfigFlipEnvironment, Value: "sandbox"}, // Flip environment (sandbox/production)
 	}
 
 	for _, config := range defaultConfigs {

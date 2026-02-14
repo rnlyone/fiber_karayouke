@@ -5,7 +5,7 @@ import { useAuth, getAuthToken } from '../lib/auth.jsx';
 /**
  * Checkout is now just a redirect helper.
  * The actual purchase flow is handled on the Packages page
- * which calls iPaymu create-payment and redirects to iPaymu's hosted page.
+ * which calls Flip create-bill and opens the Flip Checkout popup.
  * This page handles the case where someone directly navigates to /checkout/:packageId.
  */
 const Checkout = () => {

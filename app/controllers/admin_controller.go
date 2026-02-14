@@ -64,7 +64,7 @@ func (c *AdminController) GetConfigs(ctx *fiber.Ctx) error {
 		models.ConfigRoomCreationCost: "1",   // 1 credit default
 		models.ConfigDefaultCredits:   "0",   // 0 credits for new users
 		models.ConfigDailyFreeCredits: "5",   // 5 daily free credits for free plan
-		models.ConfigIPaymuSandbox:    "true",
+		models.ConfigFlipEnvironment:  "sandbox",
 	}
 	for key, defaultValue := range defaults {
 		if _, exists := configMap[key]; !exists {
@@ -146,9 +146,9 @@ func (c *AdminController) DeleteConfig(ctx *fiber.Ctx) error {
 		models.ConfigRoomCreationCost,
 		models.ConfigDefaultCredits,
 		models.ConfigDailyFreeCredits,
-		models.ConfigIPaymuVA,
-		models.ConfigIPaymuAPIKey,
-		models.ConfigIPaymuSandbox,
+		models.ConfigFlipSecretKey,
+		models.ConfigFlipValidationToken,
+		models.ConfigFlipEnvironment,
 	}
 	for _, critical := range criticalConfigs {
 		if key == critical {

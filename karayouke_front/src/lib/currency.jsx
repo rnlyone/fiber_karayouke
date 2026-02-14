@@ -1,4 +1,4 @@
-// Currency utility - IDR (Indonesian Rupiah) as primary currency via iPaymu
+// Currency utility - IDR (Indonesian Rupiah) as primary currency via Flip
 
 // Format price in IDR
 export const formatIDR = (amount) => {

@@ -23,6 +23,10 @@ const AdminSettings = () => {
 		room_max_duration: { label: 'Room Max Duration (minutes)', type: 'number', critical: true },
 		room_creation_cost: { label: 'Room Creation Cost (credits)', type: 'number', critical: true },
 		default_credits: { label: 'Default Credits for New Users', type: 'number', critical: true },
+		daily_free_credits: { label: 'Daily Free Credits (Free Plan)', type: 'number', critical: true },
+		flip_secret_key: { label: 'Flip API Secret Key', type: 'password', critical: true },
+		flip_validation_token: { label: 'Flip Validation Token', type: 'password', critical: true },
+		flip_environment: { label: 'Flip Environment (sandbox/production)', type: 'text', critical: true },
 	};
 
 	useEffect(() => {

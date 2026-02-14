@@ -22,7 +22,7 @@ const PaymentStatus = () => {
 	const [error, setError] = useState(null);
 	const [pollCount, setPollCount] = useState(0);
 
-	// Get initial state from navigation (e.g. from iPaymu redirect)
+	// Get initial state from navigation
 	const initialState = location.state || {};
 
 	const fetchTransaction = useCallback(async () => {
@@ -218,11 +218,6 @@ const PaymentStatus = () => {
 							<span className="auth-spinner" style={{ marginRight: '10px' }} />
 							Checking for updates... ({pollCount})
 						</p>
-						{transaction?.payment_url && (
-							<a href={transaction.payment_url} className="btn-primary" target="_blank" rel="noopener noreferrer">
-								Complete Payment
-							</a>
-						)}
 					</div>
 				)}
 

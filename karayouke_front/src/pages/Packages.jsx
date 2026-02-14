@@ -60,7 +60,7 @@ const Packages = () => {
 			const body = type === 'subscription'
 				? { plan_id: id }
 				: { package_id: id };
-			const response = await fetchWithAuth(`${API_BASE}/api/ipaymu/create-payment`, {
+			const response = await fetchWithAuth(`${API_BASE}/api/flip/create-bill`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(body),
@@ -70,10 +70,30 @@ const Packages = () => {
 				throw new Error(errData.error || 'Failed to create payment');
 			}
 			const data = await response.json();
-			if (data.payment_url) {
-				window.location.href = data.payment_url;
+
+			// Free item - no payment needed
+			if (data.free) {
+				navigate(`/payment/status/${data.transaction_id}`);
+				return;
+			}
+
+			// Flip PopUp checkout flow
+			if (data.company_code && data.product_code && window.FlipCheckout) {
+				window.FlipCheckout.pay(data.company_code, data.product_code, {
+					onSuccess: () => {
+						navigate(`/payment/status/${data.transaction_id}`);
+					},
+					onPending: () => {
+						navigate(`/payment/status/${data.transaction_id}`);
+					},
+					onClose: () => {
+						setPurchasing(null);
+						// User closed popup without completing - navigate to status to check
+						navigate(`/payment/status/${data.transaction_id}`);
+					},
+				});
 			} else {
-				throw new Error('No payment URL returned');
+				throw new Error('Payment gateway is unavailable. Please try again later.');
 			}
 		} catch (err) {
 			setError(err.message);
@@ -271,7 +291,7 @@ const Packages = () => {
 						</div>
 						<div className="faq-item">
 							<h4>What payment methods are accepted?</h4>
-							<p>We accept bank transfers, virtual accounts, QRIS, e-wallets, and other Indonesian payment methods via iPaymu.</p>
+							<p>We accept bank transfers, virtual accounts, QRIS, e-wallets, and other Indonesian payment methods via Flip.</p>
 						</div>
 						<div className="faq-item">
 							<h4>Can I get a refund?</h4>

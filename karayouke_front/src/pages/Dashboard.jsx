@@ -209,6 +209,31 @@ const Dashboard = () => {
 						</div>
 						<div className="dashboard-info-grid">
 							<div className="dashboard-info-card">
+								<div className="dashboard-info-label">Current Plan</div>
+								<div className="dashboard-info-value" style={{ fontSize: '1.2rem' }}>
+									{creditInfo?.subscription?.plan_name
+										? `📋 ${creditInfo.subscription.plan_name}`
+										: '🆓 Free Plan'}
+								</div>
+								{creditInfo?.subscription ? (
+									<>
+										<div className="dashboard-info-subtext">
+											🎁 {creditInfo.subscription.daily_free_credits} daily credits &bull; 🕐 {creditInfo.subscription.room_duration_minutes}min rooms
+										</div>
+										<div className="dashboard-info-subtext" style={{ marginTop: '4px', fontSize: '0.78rem', opacity: 0.7 }}>
+											Expires {new Date(creditInfo.subscription.expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+										</div>
+									</>
+								) : (
+									<div className="dashboard-info-subtext">
+										Upgrade for more daily credits &amp; longer rooms
+									</div>
+								)}
+								<Link to="/packages" className="dashboard-buy-credits-btn">
+									{creditInfo?.subscription ? 'Manage Plan' : 'Upgrade Plan'}
+								</Link>
+							</div>
+							<div className="dashboard-info-card">
 								<div className="dashboard-info-label">Total Credits</div>
 								<div className="dashboard-info-value">{creditInfo?.total_credit ?? user?.total_credit ?? 0}</div>
 								<div className="dashboard-info-subtext">
@@ -218,11 +243,6 @@ const Dashboard = () => {
 										</>
 									) : 'Use credits to create rooms'}
 								</div>
-								{creditInfo?.subscription?.plan_name && (
-									<div className="dashboard-info-subtext" style={{ marginTop: '4px', color: '#a78bfa' }}>
-										📋 {creditInfo.subscription.plan_name} &bull; {creditInfo.subscription.room_duration}min rooms
-									</div>
-								)}
 								<Link to="/packages" className="dashboard-buy-credits-btn">
 									Get More Credits
 								</Link>

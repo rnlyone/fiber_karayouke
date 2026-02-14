@@ -24,7 +24,7 @@ func RegisterWebRoutes(app *fiber.App) {
 	roomController := &controllers.RoomController{}
 	adminController := &controllers.AdminController{}
 	packageController := &controllers.PackageController{}
-	ipaymuController := &controllers.IPaymuController{}
+	flipController := &controllers.FlipController{}
 
 	app.Get("", userController.Index)
 
@@ -73,10 +73,10 @@ func RegisterWebRoutes(app *fiber.App) {
 	app.Get("/api/transactions/:id", packageController.GetTransaction)
 	app.Get("/api/credits", packageController.GetMyCredits)
 
-	// iPaymu payment routes
-	app.Post("/api/ipaymu/create-payment", ipaymuController.CreatePayment)
-	app.Post("/api/ipaymu/callback", ipaymuController.HandleCallback)
-	app.Get("/api/ipaymu/check/:id", ipaymuController.CheckTransaction)
+	// Flip payment routes
+	app.Post("/api/flip/create-bill", flipController.CreateBill)
+	app.Post("/api/flip/callback", flipController.HandleCallback)
+	app.Get("/api/flip/check/:id", flipController.CheckTransaction)
 
 	// TV connection routes
 	tvController := &controllers.TVController{}

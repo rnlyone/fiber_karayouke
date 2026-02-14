@@ -170,9 +170,9 @@ type Transaction struct {
 	PlanID        *string           `gorm:"column:plan_id" json:"plan_id"`               // For subscription purchases
 	Amount        int64             `gorm:"column:amount" json:"amount"`                 // Amount in IDR
 	Status        string            `gorm:"column:status" json:"status"`                 // pending, settlement, failed, expired, refunded
-	PaymentMethod string            `gorm:"column:payment_method" json:"payment_method"` // ipaymu, free
+	PaymentMethod string            `gorm:"column:payment_method" json:"payment_method"` // flip, free
 	TxType        string            `gorm:"column:tx_type" json:"tx_type"`               // extra_credit, subscription
-	ExternalID    string            `gorm:"column:external_id" json:"external_id"`       // iPaymu transaction ID
+	ExternalID    string            `gorm:"column:external_id" json:"external_id"`       // Flip bill_link_id
 	CreatedAt     time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time         `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 	PaidAt        *time.Time        `gorm:"column:paid_at" json:"paid_at"`
@@ -196,13 +196,13 @@ const (
 
 // System config key constants
 const (
-	ConfigRoomMaxDuration  = "room_max_duration"  // in minutes (fallback for free plan)
-	ConfigRoomCreationCost = "room_creation_cost" // credits required
-	ConfigDefaultCredits   = "default_credits"    // extra credits for new users
-	ConfigDailyFreeCredits = "daily_free_credits" // daily free credits for free plan (default: 5)
-	ConfigIPaymuVA         = "ipaymu_va"          // iPaymu Virtual Account
-	ConfigIPaymuAPIKey     = "ipaymu_api_key"     // iPaymu API Key
-	ConfigIPaymuSandbox    = "ipaymu_sandbox"     // "true" or "false"
+	ConfigRoomMaxDuration     = "room_max_duration"     // in minutes (fallback for free plan)
+	ConfigRoomCreationCost    = "room_creation_cost"    // credits required
+	ConfigDefaultCredits      = "default_credits"       // extra credits for new users
+	ConfigDailyFreeCredits    = "daily_free_credits"    // daily free credits for free plan (default: 5)
+	ConfigFlipSecretKey       = "flip_secret_key"       // Flip API Secret Key
+	ConfigFlipValidationToken = "flip_validation_token" // Flip Validation Token
+	ConfigFlipEnvironment     = "flip_environment"      // "production" or "sandbox"
 )
 
 // Transaction type constants
