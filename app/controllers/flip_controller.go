@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -228,7 +229,8 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 	}
 	redirectURL := baseURL + "/payment/status/" + txID
 
-	// Build Flip Create Bill V3 request (JSON body, supports popup checkout)
+	// Try V3 first (JSON body, supports popup checkout with company_code/product_code)
+	// V3 is NOT available in sandbox/test mode, so we fall back to V2 on 404
 	billBody, _ := json.Marshal(map[string]interface{}{
 		"title":        productName,
 		"type":         "SINGLE",
@@ -241,6 +243,24 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 	})
 
 	result, flipErr := callFlipAPI("/v3/pwf/bill", string(billBody), "application/json")
+
+	// Fallback to V2 if V3 returns 404 (not available in sandbox/test)
+	if flipErr != nil && strings.Contains(flipErr.Error(), "404") {
+		fmt.Printf("[Flip] V3 returned 404, falling back to V2\n")
+
+		// V2 uses application/x-www-form-urlencoded with step=2 (integer)
+		v2Form := url.Values{}
+		v2Form.Set("title", productName)
+		v2Form.Set("type", "SINGLE")
+		v2Form.Set("amount", fmt.Sprintf("%d", price))
+		v2Form.Set("step", "2") // V2: step 2 = payment method selection
+		v2Form.Set("redirect_url", redirectURL)
+		v2Form.Set("sender_name", user.Name)
+		v2Form.Set("sender_email", user.Email)
+
+		result, flipErr = callFlipAPI("/v2/pwf/bill", v2Form.Encode(), "application/x-www-form-urlencoded")
+	}
+
 	if flipErr != nil {
 		// Rollback transaction
 		initializers.Db.Delete(&transaction)
@@ -507,11 +527,20 @@ func (c *FlipController) CheckTransaction(ctx *fiber.Ctx) error {
 	})
 }
 
-// checkAndUpdateFlipPayment calls Flip's Get Payment V3 API to verify the actual payment status
+// checkAndUpdateFlipPayment calls Flip's Get Payment API to verify the actual payment status
+// Tries V3 first, falls back to V2 on 404
 func (c *FlipController) checkAndUpdateFlipPayment(transaction *models.Transaction, user *models.User) {
-	// Flip API: GET /v3/pwf/:bill_id/payment
+	// Try V3 first: GET /v3/pwf/:bill_id/payment
 	endpoint := fmt.Sprintf("/v3/pwf/%s/payment", transaction.ExternalID)
 	result, err := callFlipAPIGet(endpoint)
+
+	// Fallback to V2 if V3 returns 404
+	if err != nil && strings.Contains(err.Error(), "404") {
+		fmt.Printf("[Flip Check] V3 returned 404, falling back to V2\n")
+		endpoint = fmt.Sprintf("/v2/pwf/%s/payment", transaction.ExternalID)
+		result, err = callFlipAPIGet(endpoint)
+	}
+
 	if err != nil {
 		fmt.Printf("[Flip Check] Error checking payment for tx=%s link_id=%s: %v\n",
 			transaction.ID, transaction.ExternalID, err)
