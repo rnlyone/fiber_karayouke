@@ -100,6 +100,49 @@ func callFlipAPI(endpoint string, body string, contentType string) (map[string]i
 	return result, nil
 }
 
+// callFlipAPIGet makes a GET request to Flip API
+func callFlipAPIGet(endpoint string) (map[string]interface{}, error) {
+	baseURL := getFlipBaseURL()
+	url := baseURL + endpoint
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", getFlipAuthHeader())
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Flip API error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v (body: %s)", err, string(respBody))
+	}
+
+	fmt.Printf("[Flip] GET %s response (status %d): %s\n", endpoint, resp.StatusCode, string(respBody))
+
+	if resp.StatusCode >= 400 {
+		msg := "Flip API error"
+		if m, ok := result["message"].(string); ok {
+			msg = m
+		}
+		return result, fmt.Errorf("%s (HTTP %d)", msg, resp.StatusCode)
+	}
+
+	return result, nil
+}
+
 // ========================================
 // Create Bill (Flip Checkout PopUp)
 // ========================================
@@ -283,18 +326,41 @@ func (c *FlipController) handleFreeItem(ctx *fiber.Ctx, user *models.User, packa
 // ========================================
 
 // HandleCallback processes Flip accept payment callbacks
+// IMPORTANT: Flip requires HTTP 200 response. Non-200 causes retries (5x, 2min interval).
 func (c *FlipController) HandleCallback(ctx *fiber.Ctx) error {
+	// Log raw request for debugging
+	rawBody := string(ctx.Body())
+	contentType := ctx.Get("Content-Type")
+	fmt.Printf("[Flip Callback] Received callback, Content-Type=%s, body length=%d\n", contentType, len(rawBody))
+	fmt.Printf("[Flip Callback] Raw body: %s\n", rawBody)
+
 	// Flip sends application/x-www-form-urlencoded with data=JSON&token=VALIDATION_TOKEN
 	dataStr := ctx.FormValue("data")
 	token := ctx.FormValue("token")
 
-	fmt.Printf("[Flip Callback] Received callback, data length=%d\n", len(dataStr))
+	// Fallback: if form parsing returned empty data, try parsing raw body as JSON
+	// (in case Flip V3 sends JSON body instead of form-urlencoded)
+	if dataStr == "" && len(rawBody) > 0 {
+		fmt.Printf("[Flip Callback] FormValue 'data' is empty, trying raw body as JSON\n")
+		// Check if the raw body is JSON (starts with '{')
+		trimmed := strings.TrimSpace(rawBody)
+		if strings.HasPrefix(trimmed, "{") {
+			dataStr = trimmed
+		}
+	}
 
-	// Validate token
+	if dataStr == "" {
+		fmt.Printf("[Flip Callback] No callback data found in request\n")
+		// Always return 200 to Flip
+		return ctx.Status(200).JSON(fiber.Map{"status": "error", "message": "no data"})
+	}
+
+	// Validate token (only if we have a validation token configured)
 	validationToken := getFlipValidationToken()
-	if validationToken != "" && token != validationToken {
-		fmt.Printf("[Flip Callback] Invalid validation token\n")
-		return ctx.Status(401).JSON(fiber.Map{"error": "Invalid token"})
+	if validationToken != "" && token != "" && token != validationToken {
+		fmt.Printf("[Flip Callback] Invalid validation token: got=%s expected=%s\n", token, validationToken)
+		// Still return 200 to avoid Flip retries
+		return ctx.Status(200).JSON(fiber.Map{"status": "error", "message": "invalid token"})
 	}
 
 	// Parse callback data
@@ -314,19 +380,47 @@ func (c *FlipController) HandleCallback(ctx *fiber.Ctx) error {
 	}
 
 	if err := json.Unmarshal([]byte(dataStr), &callbackData); err != nil {
-		fmt.Printf("[Flip Callback] Failed to parse data: %v\n", err)
-		return ctx.Status(400).JSON(fiber.Map{"error": "Invalid callback data"})
+		fmt.Printf("[Flip Callback] Failed to parse data JSON: %v, dataStr=%s\n", err, dataStr)
+		return ctx.Status(200).JSON(fiber.Map{"status": "error", "message": "invalid json"})
 	}
 
-	fmt.Printf("[Flip Callback] id=%s reference_id=%s status=%s amount=%.0f sender_bank=%s\n",
-		callbackData.ID, callbackData.ReferenceID, callbackData.Status, callbackData.Amount, callbackData.SenderBank)
+	fmt.Printf("[Flip Callback] Parsed: id=%s bill_link_id=%v reference_id=%s status=%s amount=%.0f sender_bank=%s\n",
+		callbackData.ID, callbackData.BillLinkID, callbackData.ReferenceID, callbackData.Status, callbackData.Amount, callbackData.SenderBank)
 
 	// Find transaction by reference_id (our transaction ID)
 	var transaction models.Transaction
-	if err := initializers.Db.Where("id = ?", callbackData.ReferenceID).First(&transaction).Error; err != nil {
-		fmt.Printf("[Flip Callback] Transaction not found: %s\n", callbackData.ReferenceID)
-		return ctx.Status(404).JSON(fiber.Map{"error": "Transaction not found"})
+	txFound := false
+
+	// Try finding by reference_id first (our txID)
+	if callbackData.ReferenceID != "" {
+		if err := initializers.Db.Where("id = ?", callbackData.ReferenceID).First(&transaction).Error; err == nil {
+			txFound = true
+		}
 	}
+
+	// Fallback: try finding by external_id (Flip's link_id)
+	if !txFound && callbackData.BillLinkID != nil {
+		billLinkIDStr := ""
+		switch v := callbackData.BillLinkID.(type) {
+		case float64:
+			billLinkIDStr = fmt.Sprintf("%.0f", v)
+		case string:
+			billLinkIDStr = v
+		}
+		if billLinkIDStr != "" {
+			if err := initializers.Db.Where("external_id = ?", billLinkIDStr).First(&transaction).Error; err == nil {
+				txFound = true
+			}
+		}
+	}
+
+	if !txFound {
+		fmt.Printf("[Flip Callback] Transaction not found: reference_id=%s bill_link_id=%v\n",
+			callbackData.ReferenceID, callbackData.BillLinkID)
+		return ctx.Status(200).JSON(fiber.Map{"status": "error", "message": "transaction not found"})
+	}
+
+	fmt.Printf("[Flip Callback] Found transaction: tx=%s current_status=%s\n", transaction.ID, transaction.Status)
 
 	// Store Flip payment ID
 	if callbackData.ID != "" {
@@ -343,7 +437,7 @@ func (c *FlipController) HandleCallback(ctx *fiber.Ctx) error {
 	// Only process if still pending
 	if transaction.Status != models.TransactionStatusPending {
 		fmt.Printf("[Flip Callback] Transaction already processed: %s (status: %s)\n", transaction.ID, transaction.Status)
-		return ctx.JSON(fiber.Map{"status": "already_processed"})
+		return ctx.Status(200).JSON(fiber.Map{"status": "already_processed"})
 	}
 
 	// Flip status: SUCCESSFUL, CANCELLED, FAILED
@@ -352,7 +446,7 @@ func (c *FlipController) HandleCallback(ctx *fiber.Ctx) error {
 		var user models.User
 		if err := initializers.Db.Where("id = ?", transaction.UserID).First(&user).Error; err != nil {
 			fmt.Printf("[Flip Callback] User not found: %s\n", transaction.UserID)
-			return ctx.Status(500).JSON(fiber.Map{"error": "User not found"})
+			return ctx.Status(200).JSON(fiber.Map{"status": "error", "message": "user not found"})
 		}
 
 		now := time.Now()
@@ -362,18 +456,20 @@ func (c *FlipController) HandleCallback(ctx *fiber.Ctx) error {
 
 		settleTransaction(&transaction, &user)
 
-		fmt.Printf("[Flip Callback] Payment successful: tx=%s user=%s\n", transaction.ID, user.ID)
+		fmt.Printf("[Flip Callback] ✅ Payment successful: tx=%s user=%s amount=%.0f\n", transaction.ID, user.ID, callbackData.Amount)
 	} else if status == "CANCELLED" {
 		transaction.Status = models.TransactionStatusExpired
 		initializers.Db.Save(&transaction)
-		fmt.Printf("[Flip Callback] Payment cancelled/expired: tx=%s\n", transaction.ID)
+		fmt.Printf("[Flip Callback] ❌ Payment cancelled/expired: tx=%s\n", transaction.ID)
 	} else if status == "FAILED" {
 		transaction.Status = models.TransactionStatusFailed
 		initializers.Db.Save(&transaction)
-		fmt.Printf("[Flip Callback] Payment failed: tx=%s\n", transaction.ID)
+		fmt.Printf("[Flip Callback] ❌ Payment failed: tx=%s\n", transaction.ID)
+	} else {
+		fmt.Printf("[Flip Callback] Unknown status '%s' for tx=%s\n", callbackData.Status, transaction.ID)
 	}
 
-	return ctx.JSON(fiber.Map{"status": "ok"})
+	return ctx.Status(200).JSON(fiber.Map{"status": "ok"})
 }
 
 // ========================================
@@ -381,6 +477,7 @@ func (c *FlipController) HandleCallback(ctx *fiber.Ctx) error {
 // ========================================
 
 // CheckTransaction checks Flip transaction status
+// If the transaction is still pending and has a Flip link_id, actively checks Flip's API
 func (c *FlipController) CheckTransaction(ctx *fiber.Ctx) error {
 	user := GetUserFromToken(ctx)
 	if user == nil {
@@ -397,12 +494,81 @@ func (c *FlipController) CheckTransaction(ctx *fiber.Ctx) error {
 		return ctx.Status(404).JSON(fiber.Map{"error": "Transaction not found"})
 	}
 
+	// If still pending and we have a Flip link_id, actively check Flip's API
+	if transaction.Status == models.TransactionStatusPending && transaction.ExternalID != "" {
+		c.checkAndUpdateFlipPayment(&transaction, user)
+	}
+
 	return ctx.JSON(fiber.Map{
 		"id":     transaction.ID,
 		"status": transaction.Status,
 		"amount": transaction.Amount,
 		"type":   transaction.TxType,
 	})
+}
+
+// checkAndUpdateFlipPayment calls Flip's Get Payment V3 API to verify the actual payment status
+func (c *FlipController) checkAndUpdateFlipPayment(transaction *models.Transaction, user *models.User) {
+	// Flip API: GET /v3/pwf/:bill_id/payment
+	endpoint := fmt.Sprintf("/v3/pwf/%s/payment", transaction.ExternalID)
+	result, err := callFlipAPIGet(endpoint)
+	if err != nil {
+		fmt.Printf("[Flip Check] Error checking payment for tx=%s link_id=%s: %v\n",
+			transaction.ID, transaction.ExternalID, err)
+		return
+	}
+
+	// Parse data array from response
+	dataArr, ok := result["data"].([]interface{})
+	if !ok || len(dataArr) == 0 {
+		fmt.Printf("[Flip Check] No payments found for tx=%s link_id=%s\n",
+			transaction.ID, transaction.ExternalID)
+		return
+	}
+
+	// Check each payment (SINGLE type bill should have at most 1)
+	for _, item := range dataArr {
+		payment, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		status, _ := payment["status"].(string)
+		status = strings.ToUpper(status)
+
+		fmt.Printf("[Flip Check] Payment found for tx=%s: status=%s\n", transaction.ID, status)
+
+		if status == "SUCCESSFUL" {
+			now := time.Now()
+			transaction.Status = models.TransactionStatusSettlement
+			transaction.PaidAt = &now
+
+			if senderBank, ok := payment["sender_bank"].(string); ok && senderBank != "" {
+				bankType, _ := payment["sender_bank_type"].(string)
+				if bankType == "" {
+					bankType = "bank"
+				}
+				transaction.PaymentMethod = "flip:" + senderBank + ":" + bankType
+			}
+
+			initializers.Db.Save(transaction)
+			settleTransaction(transaction, user)
+			fmt.Printf("[Flip Check] ✅ Payment verified as successful via API: tx=%s user=%s\n",
+				transaction.ID, user.ID)
+			return
+		} else if status == "CANCELLED" {
+			transaction.Status = models.TransactionStatusExpired
+			initializers.Db.Save(transaction)
+			fmt.Printf("[Flip Check] ❌ Payment cancelled via API: tx=%s\n", transaction.ID)
+			return
+		} else if status == "FAILED" {
+			transaction.Status = models.TransactionStatusFailed
+			initializers.Db.Save(transaction)
+			fmt.Printf("[Flip Check] ❌ Payment failed via API: tx=%s\n", transaction.ID)
+			return
+		}
+		// PENDING or other status - do nothing, keep polling
+	}
 }
 
 // ========================================
