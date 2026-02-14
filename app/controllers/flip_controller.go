@@ -207,13 +207,13 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 		result, flipErr = callFlipAPI("/v3/pwf/bill", string(billBody), "application/json")
 	} else {
 		// V2: form-urlencoded body (sandbox compatible)
+		// V2 uses integer step values: 1=input-data, 2=payment-method, 3=payment-confirmation
 		formData := url.Values{}
 		formData.Set("title", productName)
 		formData.Set("type", "SINGLE")
 		formData.Set("amount", fmt.Sprintf("%d", price))
-		formData.Set("step", "checkout_seamless")
+		formData.Set("step", "2")
 		formData.Set("redirect_url", redirectURL)
-		formData.Set("reference_id", txID)
 		formData.Set("sender_name", user.Name)
 		formData.Set("sender_email", user.Email)
 		result, flipErr = callFlipAPI("/v2/pwf/bill", formData.Encode(), "application/x-www-form-urlencoded")
