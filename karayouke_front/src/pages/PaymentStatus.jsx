@@ -48,7 +48,7 @@ const PaymentStatus = () => {
 		}
 	}, [transactionId]);
 
-	// Open the Flip payment popup or redirect to link
+	// Open the Flip payment popup
 	const openFlipPayment = useCallback((companyCode, productCode, linkUrl) => {
 		if (companyCode && productCode && window.FlipCheckout) {
 			setPopupOpen(true);
@@ -58,7 +58,9 @@ const PaymentStatus = () => {
 				onClose: () => { setPopupOpen(false); },
 			});
 		} else if (linkUrl) {
-			window.open(linkUrl, '_blank');
+			// Fallback: open Flip payment link in new tab (ensure full URL)
+			const fullUrl = linkUrl.startsWith('http') ? linkUrl : 'https://' + linkUrl;
+			window.open(fullUrl, '_blank', 'noopener');
 		}
 	}, [fetchTransaction]);
 

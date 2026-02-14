@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -186,11 +185,8 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 	}
 	redirectURL := baseURL + "/payment/status/" + txID
 
-	// Build Flip Create Bill request
-	var result map[string]interface{}
-	var flipErr error
-
-	billData := map[string]interface{}{
+	// Build Flip Create Bill V3 request (JSON body, supports popup checkout)
+	billBody, _ := json.Marshal(map[string]interface{}{
 		"title":        productName,
 		"type":         "SINGLE",
 		"amount":       price,
@@ -199,26 +195,9 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 		"reference_id": txID,
 		"sender_name":  user.Name,
 		"sender_email": user.Email,
-	}
+	})
 
-	if getFlipEnvironment() == "production" {
-		// V3: JSON body (supports popup with company_code/product_code)
-		billBody, _ := json.Marshal(billData)
-		result, flipErr = callFlipAPI("/v3/pwf/bill", string(billBody), "application/json")
-	} else {
-		// V2: form-urlencoded body (sandbox compatible)
-		// V2 uses integer step values: 1=input-data, 2=payment-method, 3=payment-confirmation
-		formData := url.Values{}
-		formData.Set("title", productName)
-		formData.Set("type", "SINGLE")
-		formData.Set("amount", fmt.Sprintf("%d", price))
-		formData.Set("step", "2")
-		formData.Set("redirect_url", redirectURL)
-		formData.Set("sender_name", user.Name)
-		formData.Set("sender_email", user.Email)
-		result, flipErr = callFlipAPI("/v2/pwf/bill", formData.Encode(), "application/x-www-form-urlencoded")
-	}
-
+	result, flipErr := callFlipAPI("/v3/pwf/bill", string(billBody), "application/json")
 	if flipErr != nil {
 		// Rollback transaction
 		initializers.Db.Delete(&transaction)
@@ -259,12 +238,12 @@ func (c *FlipController) CreateBill(ctx *fiber.Ctx) error {
 	initializers.Db.Save(&transaction)
 
 	return ctx.JSON(fiber.Map{
-		"transaction_id":    txID,
-		"company_code":      companyCode,
-		"product_code":      productCode,
-		"link_url":          linkURL,
-		"amount":            price,
-		"product":           productName,
+		"transaction_id": txID,
+		"company_code":   companyCode,
+		"product_code":   productCode,
+		"link_url":       linkURL,
+		"amount":         price,
+		"product":        productName,
 	})
 }
 

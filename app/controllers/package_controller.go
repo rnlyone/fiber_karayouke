@@ -211,18 +211,18 @@ func (c *PackageController) GetTransaction(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.JSON(fiber.Map{
-		"id":                 transaction.ID,
-		"item_name":          itemName,
-		"credit_amount":      creditAmt,
-		"amount":             transaction.Amount,
-		"status":             transaction.Status,
-		"payment_method":     transaction.PaymentMethod,
-		"tx_type":            transaction.TxType,
-		"external_id":        transaction.ExternalID,
-		"flip_url":           transaction.FlipURL,
-		"flip_company_code":  transaction.FlipCompanyCode,
-		"flip_product_code":  transaction.FlipProductCode,
-		"created_at":         transaction.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		"id":                transaction.ID,
+		"item_name":         itemName,
+		"credit_amount":     creditAmt,
+		"amount":            transaction.Amount,
+		"status":            transaction.Status,
+		"payment_method":    transaction.PaymentMethod,
+		"tx_type":           transaction.TxType,
+		"external_id":       transaction.ExternalID,
+		"flip_url":          transaction.FlipURL,
+		"flip_company_code": transaction.FlipCompanyCode,
+		"flip_product_code": transaction.FlipProductCode,
+		"created_at":        transaction.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	})
 }
 
