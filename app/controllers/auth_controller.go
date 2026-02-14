@@ -39,6 +39,7 @@ type UserResponse struct {
 	ExtraCredit           int     `json:"extra_credit"`
 	FreeCredit            int     `json:"free_credit"`
 	TotalCredit           int     `json:"total_credit"`
+	SubscriptionPlanID    *string `json:"subscription_plan_id"`
 	SubscriptionPlanName  *string `json:"subscription_plan_name"`
 	SubscriptionExpiresAt *string `json:"subscription_expires_at"`
 	RoomDuration          int     `json:"room_duration"`
@@ -64,6 +65,7 @@ func buildUserResponse(user *models.User) UserResponse {
 	}
 
 	if user.HasActiveSubscription() {
+		resp.SubscriptionPlanID = user.SubscriptionPlanID
 		var plan models.SubscriptionPlan
 		if err := initializers.Db.Where("id = ?", *user.SubscriptionPlanID).First(&plan).Error; err == nil {
 			resp.SubscriptionPlanName = &plan.PlanName

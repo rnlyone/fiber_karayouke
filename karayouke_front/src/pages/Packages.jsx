@@ -18,17 +18,24 @@ const Packages = () => {
 	const [plans, setPlans] = useState([]);
 	const [packages, setPackages] = useState([]);
 	const [freePlan, setFreePlan] = useState(null);
+	const [userInfo, setUserInfo] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [purchasing, setPurchasing] = useState(null); // id of item being purchased
 
 	const fetchData = useCallback(async () => {
 		try {
-			const [plansRes, packagesRes, freeRes] = await Promise.all([
+			const fetches = [
 				fetch(`${API_BASE}/api/subscription-plans`),
 				fetch(`${API_BASE}/api/packages`),
 				fetch(`${API_BASE}/api/free-plan-info`),
-			]);
+			];
+			// Fetch user info if authenticated
+			if (isAuthenticated) {
+				fetches.push(fetchWithAuth(`${API_BASE}/api/auth/me`));
+			}
+			const results = await Promise.all(fetches);
+			const [plansRes, packagesRes, freeRes] = results;
 			if (!plansRes.ok) throw new Error('Failed to fetch subscription plans');
 			if (!packagesRes.ok) throw new Error('Failed to fetch packages');
 			const plansData = await plansRes.json();
@@ -39,12 +46,16 @@ const Packages = () => {
 				const freeData = await freeRes.json();
 				setFreePlan(freeData);
 			}
+			if (results[3] && results[3].ok) {
+				const userData = await results[3].json();
+				setUserInfo(userData);
+			}
 		} catch (err) {
 			setError(err.message);
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [isAuthenticated]);
 
 	useEffect(() => {
 		fetchData();
@@ -173,13 +184,21 @@ const Packages = () => {
 											>
 												Get Started Free
 											</button>
-										) : (
-											<button
-												className="package-buy-btn"
-												style={{ opacity: 0.6, cursor: 'default' }}
-												disabled
-											>
-												Current Plan
+									) : !userInfo?.subscription_plan_id ? (
+										<button
+											className="package-buy-btn current"
+											style={{ opacity: 0.6, cursor: 'default' }}
+											disabled
+										>
+											✓ Current Plan
+										</button>
+									) : (
+										<button
+											className="package-buy-btn"
+											style={{ opacity: 0.5, cursor: 'default' }}
+											disabled
+										>
+											Free Plan
 											</button>
 										)}
 									</div>
@@ -215,7 +234,14 @@ const Packages = () => {
 													disabled={purchasing === plan.id}
 													onClick={() => handlePurchase('subscription', plan.id)}
 												>
-													{purchasing === plan.id ? 'Processing...' : isAuthenticated ? 'Subscribe Now' : 'Sign in to Subscribe'}
+													{(() => {
+											const isCurrentPlan = userInfo?.subscription_plan_id === plan.id;
+											if (purchasing === plan.id) return 'Processing...';
+											if (!isAuthenticated) return 'Sign in to Subscribe';
+											if (isCurrentPlan) return '✓ Current Plan';
+											if (userInfo?.subscription_plan_id) return 'Switch Plan';
+											return 'Subscribe Now';
+										})()}
 												</button>
 											</div>
 										);
