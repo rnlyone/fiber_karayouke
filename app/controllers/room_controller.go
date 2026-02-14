@@ -83,12 +83,16 @@ func (c *RoomController) Create(ctx *fiber.Ctx) error {
 		}
 	}
 
+	// Calculate room duration based on user's subscription
+	maxDuration := GetUserRoomDuration(user)
+
 	room := models.Room{
 		ID:          generateRoomID(),
 		RoomKey:     roomKey,
 		RoomName:    req.Name,
 		RoomCreator: user.ID,
 		RoomMaster:  user.ID,
+		MaxDuration: maxDuration,
 	}
 
 	// Deduct credits (free first, then extra)
@@ -118,8 +122,6 @@ func (c *RoomController) Create(ctx *fiber.Ctx) error {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to create room"})
 	}
 
-	// Use user-specific room duration
-	maxDuration := GetUserRoomDuration(user)
 	expiredAt := room.GetExpiredAt(maxDuration)
 	formattedExpiredAt := expiredAt.Format("2006-01-02T15:04:05Z07:00")
 
@@ -146,10 +148,10 @@ func (c *RoomController) List(ctx *fiber.Ctx) error {
 		return ctx.Status(500).JSON(fiber.Map{"error": "Failed to fetch rooms"})
 	}
 
-	maxDuration := GetRoomMaxDuration()
+	defaultDuration := GetRoomMaxDuration() // fallback for old rooms without stored duration
 	response := make([]RoomResponse, len(rooms))
 	for i, room := range rooms {
-		expiredAt := room.GetExpiredAt(maxDuration)
+		expiredAt := room.GetExpiredAt(defaultDuration)
 		formattedExpiredAt := expiredAt.Format("2006-01-02T15:04:05Z07:00")
 		response[i] = RoomResponse{
 			ID:        room.ID,
@@ -159,7 +161,7 @@ func (c *RoomController) List(ctx *fiber.Ctx) error {
 			MasterID:  room.RoomMaster,
 			CreatedAt: room.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			ExpiredAt: &formattedExpiredAt,
-			IsExpired: room.IsExpired(maxDuration),
+			IsExpired: room.IsExpired(defaultDuration),
 		}
 	}
 
@@ -177,8 +179,8 @@ func (c *RoomController) Get(ctx *fiber.Ctx) error {
 		return ctx.Status(404).JSON(fiber.Map{"error": "Room not found"})
 	}
 
-	maxDuration := GetRoomMaxDuration()
-	expiredAt := room.GetExpiredAt(maxDuration)
+	defaultDuration := GetRoomMaxDuration()
+	expiredAt := room.GetExpiredAt(defaultDuration)
 	formattedExpiredAt := expiredAt.Format("2006-01-02T15:04:05Z07:00")
 
 	return ctx.JSON(RoomResponse{
@@ -189,7 +191,7 @@ func (c *RoomController) Get(ctx *fiber.Ctx) error {
 		MasterID:  room.RoomMaster,
 		CreatedAt: room.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		ExpiredAt: &formattedExpiredAt,
-		IsExpired: room.IsExpired(maxDuration),
+		IsExpired: room.IsExpired(defaultDuration),
 	})
 }
 
@@ -204,11 +206,11 @@ func (c *RoomController) CheckAccess(ctx *fiber.Ctx) error {
 		return ctx.Status(404).JSON(fiber.Map{"error": "Room not found"})
 	}
 
-	maxDuration := GetRoomMaxDuration()
-	expiredAt := room.GetExpiredAt(maxDuration)
+	defaultDuration := GetRoomMaxDuration()
+	expiredAt := room.GetExpiredAt(defaultDuration)
 
 	// Check if room is expired
-	if room.IsExpired(maxDuration) {
+	if room.IsExpired(defaultDuration) {
 		return ctx.Status(410).JSON(fiber.Map{
 			"error":      "Room has expired",
 			"expired_at": expiredAt.Format("2006-01-02T15:04:05Z07:00"),
@@ -227,7 +229,7 @@ func (c *RoomController) CheckAccess(ctx *fiber.Ctx) error {
 		"user_name":  getUserName(user),
 		"user_id":    getUserID(user),
 		"expired_at": formattedExpiredAt,
-		"is_expired": room.IsExpired(maxDuration),
+		"is_expired": room.IsExpired(defaultDuration),
 	})
 }
 

@@ -53,9 +53,9 @@ func HandleWebSocket(c *websocket.Conn) {
 		return
 	}
 
-	// Check if room is expired
-	maxDuration := controllers.GetRoomMaxDuration()
-	if dbRoom.IsExpired(maxDuration) {
+	// Check if room is expired (use stored duration, fallback to global config)
+	defaultDuration := controllers.GetRoomMaxDuration()
+	if dbRoom.IsExpired(defaultDuration) {
 		log.Printf("WebSocket: room %s is expired", roomKey)
 		c.WriteMessage(websocket.TextMessage, []byte(`{"type":"room_expired","message":"This room has expired"}`))
 		return
@@ -120,8 +120,8 @@ func checkExpirationAndKick(roomKey string, room *Room, stop chan struct{}) {
 				continue
 			}
 
-			maxDuration := controllers.GetRoomMaxDuration()
-			if dbRoom.IsExpired(maxDuration) {
+			defaultDuration := controllers.GetRoomMaxDuration()
+			if dbRoom.IsExpired(defaultDuration) {
 				log.Printf("WebSocket: room %s has expired, kicking all users", roomKey)
 				// Broadcast expiration to all clients
 				msg := map[string]interface{}{

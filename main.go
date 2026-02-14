@@ -7,6 +7,7 @@ import (
 
 	"GoFiberMVC/app/artisan"
 	"GoFiberMVC/app/initializers"
+	"GoFiberMVC/app/models"
 	"GoFiberMVC/app/providers"
 	"GoFiberMVC/app/routes"
 )
@@ -25,6 +26,9 @@ func main() {
 	if err := initializers.DbConnection(); err != nil {
 		log.Printf("Warning: Database connection failed: %v", err)
 		log.Println("Running in WebSocket-only mode without persistence")
+	} else {
+		// Auto-migrate to add any new columns (e.g., Room.MaxDuration)
+		initializers.Db.AutoMigrate(&models.Room{})
 	}
 
 	routes.RegisterWebRoutes(app)

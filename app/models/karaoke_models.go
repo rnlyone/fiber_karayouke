@@ -85,6 +85,7 @@ type Room struct {
 	RoomName    string    `gorm:"column:room_name" json:"room_name"`
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	RoomMaster  string    `gorm:"column:room_master" json:"room_master"`
+	MaxDuration int       `gorm:"column:max_duration;default:0" json:"max_duration"` // Room duration in minutes (0 = use global default)
 	Creator     User      `gorm:"foreignKey:RoomCreator;references:ID" json:"creator"`
 	Master      User      `gorm:"foreignKey:RoomMaster;references:ID" json:"master"`
 }
@@ -93,14 +94,22 @@ func (Room) TableName() string {
 	return "rooms"
 }
 
-// GetExpiredAt calculates the expiration time based on CreatedAt + room_max_duration
-func (r *Room) GetExpiredAt(maxDuration int) time.Time {
-	return r.CreatedAt.Add(time.Duration(maxDuration) * time.Minute)
+// EffectiveMaxDuration returns the stored MaxDuration, or the provided fallback for old rooms
+func (r *Room) EffectiveMaxDuration(fallback int) int {
+	if r.MaxDuration > 0 {
+		return r.MaxDuration
+	}
+	return fallback
 }
 
-// IsExpired checks if the room has expired based on room_max_duration config
-func (r *Room) IsExpired(maxDuration int) bool {
-	return time.Now().After(r.GetExpiredAt(maxDuration))
+// GetExpiredAt calculates the expiration time based on CreatedAt + effective duration
+func (r *Room) GetExpiredAt(fallbackDuration int) time.Time {
+	return r.CreatedAt.Add(time.Duration(r.EffectiveMaxDuration(fallbackDuration)) * time.Minute)
+}
+
+// IsExpired checks if the room has expired
+func (r *Room) IsExpired(fallbackDuration int) bool {
+	return time.Now().After(r.GetExpiredAt(fallbackDuration))
 }
 
 type PurchaseLog struct {
